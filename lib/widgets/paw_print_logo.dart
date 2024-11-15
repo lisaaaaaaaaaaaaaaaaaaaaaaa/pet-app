@@ -4,110 +4,82 @@ import '../theme/app_theme.dart';
 class PawPrintLogo extends StatelessWidget {
   final double size;
   final Color? color;
-  final bool useGradient;
   final bool animate;
+  final Duration animationDuration;
   final bool showShadow;
+  final bool filled;
+  final double strokeWidth;
   final VoidCallback? onTap;
-  final String? label;
-  final bool isLoading;
 
   const PawPrintLogo({
     Key? key,
     this.size = 100,
     this.color,
-    this.useGradient = true,
     this.animate = false,
+    this.animationDuration = const Duration(milliseconds: 1500),
     this.showShadow = true,
+    this.filled = true,
+    this.strokeWidth = 2.0,
     this.onTap,
-    this.label,
-    this.isLoading = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    Widget logo = _buildLogo(context);
+    final effectiveColor = color ?? AppTheme.primaryColor;
 
-    if (animate) {
-      logo = _AnimatedPawPrint(
+    Widget logo = CustomPaint(
+      size: Size(size, size),
+      painter: _PawPrintPainter(
+        color: effectiveColor,
+        filled: filled,
+        strokeWidth: strokeWidth,
+      ),
+    );
+
+    if (showShadow) {
+      logo = Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: effectiveColor.withOpacity(0.2),
+              blurRadius: size * 0.1,
+              spreadRadius: size * 0.02,
+            ),
+          ],
+        ),
         child: logo,
       );
     }
 
-    if (isLoading) {
-      logo = Stack(
-        alignment: Alignment.center,
-        children: [
-          logo,
-          SizedBox(
-            width: size * 0.8,
-            height: size * 0.8,
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(
-                color ?? AppTheme.primaryGreen,
-              ),
-              strokeWidth: 2,
-            ),
-          ),
-        ],
+    if (animate) {
+      logo = _AnimatedPawPrint(
+        duration: animationDuration,
+        child: logo,
       );
     }
 
-    if (label != null) {
-      logo = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          logo,
-          const SizedBox(height: 8),
-          Text(
-            label!,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: color ?? AppTheme.primaryGreen,
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-        ],
+    if (onTap != null) {
+      logo = InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: logo,
       );
     }
 
-    return GestureDetector(
-      onTap: isLoading ? null : onTap,
-      child: logo,
-    );
-  }
-
-  Widget _buildLogo(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: useGradient ? AppTheme.primaryGradient : null,
-        color: useGradient ? null : (color ?? AppTheme.primaryGreen),
-        boxShadow: showShadow
-            ? [
-                BoxShadow(
-                  color: (color ?? AppTheme.primaryGreen).withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : null,
-      ),
-      child: CustomPaint(
-        painter: _PawPrintPainter(
-          color: Colors.white,
-        ),
-      ),
-    );
+    return logo;
   }
 }
 
 class _AnimatedPawPrint extends StatefulWidget {
   final Widget child;
+  final Duration duration;
 
   const _AnimatedPawPrint({
+    Key? key,
     required this.child,
-  });
+    required this.duration,
+  }) : super(key: key);
 
   @override
   State<_AnimatedPawPrint> createState() => _AnimatedPawPrintState();
@@ -118,44 +90,47 @@ class _AnimatedPawPrintState extends State<_AnimatedPawPrint>
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _rotateAnimation;
+  late Animation<double> _opacityAnimation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
+      duration: widget.duration,
       vsync: this,
-      duration: const Duration(seconds: 2),
     );
 
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 1.1),
-        weight: 50,
+        tween: Tween<double>(begin: 0.0, end: 1.2),
+        weight: 40.0,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.1, end: 1.0),
-        weight: 50,
+        tween: Tween<double>(begin: 1.2, end: 1.0),
+        weight: 60.0,
       ),
     ]).animate(CurvedAnimation(
       parent: _controller,
       curve: Curves.easeInOut,
     ));
 
-    _rotateAnimation = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 0.05),
-        weight: 50,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0.05, end: 0),
-        weight: 50,
-      ),
-    ]).animate(CurvedAnimation(
+    _rotateAnimation = Tween<double>(
+      begin: 0.0,
+      end: 0.1,
+    ).animate(CurvedAnimation(
       parent: _controller,
       curve: Curves.easeInOut,
     ));
 
-    _controller.repeat();
+    _opacityAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeIn,
+    ));
+
+    _controller.forward();
   }
 
   @override
@@ -168,68 +143,73 @@ class _AnimatedPawPrintState extends State<_AnimatedPawPrint>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _controller,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: _scaleAnimation.value,
-          child: Transform.rotate(
-            angle: _rotateAnimation.value,
+      builder: (context, child) => Transform.scale(
+        scale: _scaleAnimation.value,
+        child: Transform.rotate(
+          angle: _rotateAnimation.value,
+          child: Opacity(
+            opacity: _opacityAnimation.value,
             child: widget.child,
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
 class _PawPrintPainter extends CustomPainter {
   final Color color;
+  final bool filled;
+  final double strokeWidth;
 
   _PawPrintPainter({
     required this.color,
+    required this.filled,
+    required this.strokeWidth,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = color
-      ..style = PaintingStyle.fill;
+      ..style = filled ? PaintingStyle.fill : PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
 
     final center = Offset(size.width / 2, size.height / 2);
     final mainPadSize = size.width * 0.4;
-    final toeSize = mainPadSize * 0.35;
-    final spacing = mainPadSize * 0.4;
+    final toePadSize = size.width * 0.2;
 
     // Main pad
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: center,
-        width: mainPadSize,
-        height: mainPadSize * 1.2,
-      ),
-      paint,
-    );
+    final mainPadPath = Path()
+      ..addOval(Rect.fromCenter(
+        center: center + const Offset(0, 10),
+        width: mainPadSize * 1.2,
+        height: mainPadSize,
+      ));
 
     // Toe pads
-    canvas.drawCircle(
-      Offset(center.dx - spacing, center.dy - spacing),
-      toeSize,
-      paint,
-    );
-    canvas.drawCircle(
-      Offset(center.dx + spacing, center.dy - spacing),
-      toeSize,
-      paint,
-    );
-    canvas.drawCircle(
-      Offset(center.dx - spacing * 0.7, center.dy - spacing * 2),
-      toeSize,
-      paint,
-    );
-    canvas.drawCircle(
-      Offset(center.dx + spacing * 0.7, center.dy - spacing * 2),
-      toeSize,
-      paint,
-    );
+    final toePadOffsets = [
+      Offset(-toePadSize * 0.8, -toePadSize * 0.8),
+      Offset(toePadSize * 0.8, -toePadSize * 0.8),
+      Offset(-toePadSize, 0),
+      Offset(toePadSize, 0),
+    ];
+
+    final toePaths = toePadOffsets.map((offset) {
+      return Path()
+        ..addOval(Rect.fromCenter(
+          center: center + offset,
+          width: toePadSize,
+          height: toePadSize * 0.9,
+        ));
+    }).toList();
+
+    // Draw all paths
+    canvas.drawPath(mainPadPath, paint);
+    for (final path in toePaths) {
+      canvas.drawPath(path, paint);
+    }
   }
 
   @override

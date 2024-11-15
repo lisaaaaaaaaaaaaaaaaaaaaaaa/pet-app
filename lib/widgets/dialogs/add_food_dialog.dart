@@ -1,19 +1,17 @@
 import 'package:flutter/material.dart';
-import '../common/custom_card.dart';
-import '../common/loading_indicator.dart';
-import '../custom_button.dart';
-import '../../models/food_item.dart';
+import 'package:flutter/services.dart';
+import '../../models/food.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/constants.dart';
+import '../common/custom_card.dart';
 
 class AddFoodDialog extends StatefulWidget {
-  final String petId;
-  final FoodItem? foodItem;
+  final Food? initialFood;
+  final Function(Food food) onSave;
 
   const AddFoodDialog({
     Key? key,
-    required this.petId,
-    this.foodItem,
+    this.initialFood,
+    required this.onSave,
   }) : super(key: key);
 
   @override
@@ -22,274 +20,212 @@ class AddFoodDialog extends StatefulWidget {
 
 class _AddFoodDialogState extends State<AddFoodDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _servingSizeController = TextEditingController();
-  final _caloriesController = TextEditingController();
-  final _proteinController = TextEditingController();
-  final _fatController = TextEditingController();
-  final _fiberController = TextEditingController();
-  final _ingredientsController = TextEditingController();
-  
-  String _selectedType = 'Dry Food';
-  String _selectedUnit = 'cups';
-  bool _isLoading = false;
-
-  final List<String> _foodTypes = [
-    'Dry Food',
-    'Wet Food',
-    'Treats',
-    'Supplement',
-    'Other'
-  ];
-
-  final List<String> _units = [
-    'cups',
-    'grams',
-    'ounces',
-    'pieces',
-    'tablespoons'
-  ];
+  late TextEditingController _nameController;
+  late TextEditingController _brandController;
+  late TextEditingController _caloriesController;
+  late TextEditingController _servingSizeController;
+  late TextEditingController _notesController;
+  bool _isFavorite = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.foodItem != null) {
-      _initializeWithFood(widget.foodItem!);
-    }
-  }
-
-  void _initializeWithFood(FoodItem food) {
-    _nameController.text = food.name;
-    _selectedType = food.type;
-    _servingSizeController.text = food.servingSize.toString();
-    _selectedUnit = food.unit;
-    _caloriesController.text = food.calories.toString();
-    _proteinController.text = food.protein?.toString() ?? '';
-    _fatController.text = food.fat?.toString() ?? '';
-    _fiberController.text = food.fiber?.toString() ?? '';
-    _ingredientsController.text = food.ingredients;
+    _nameController = TextEditingController(text: widget.initialFood?.name);
+    _brandController = TextEditingController(text: widget.initialFood?.brand);
+    _caloriesController = TextEditingController(
+      text: widget.initialFood?.calories.toString(),
+    );
+    _servingSizeController = TextEditingController(
+      text: widget.initialFood?.servingSize,
+    );
+    _notesController = TextEditingController(text: widget.initialFood?.notes);
+    _isFavorite = widget.initialFood?.isFavorite ?? false;
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _servingSizeController.dispose();
+    _brandController.dispose();
     _caloriesController.dispose();
-    _proteinController.dispose();
-    _fatController.dispose();
-    _fiberController.dispose();
-    _ingredientsController.dispose();
+    _servingSizeController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
-  void _submitForm() {
-    if (!_formKey.currentState!.validate()) return;
+  void _handleSave() {
+    if (_formKey.currentState?.validate() ?? false) {
+      final food = Food(
+        id: widget.initialFood?.id ?? DateTime.now().toString(),
+        name: _nameController.text.trim(),
+        brand: _brandController.text.trim(),
+        calories: int.parse(_caloriesController.text),
+        servingSize: _servingSizeController.text.trim(),
+        notes: _notesController.text.trim(),
+        isFavorite: _isFavorite,
+        dateAdded: widget.initialFood?.dateAdded ?? DateTime.now(),
+      );
 
-    final foodItem = FoodItem(
-      id: widget.foodItem?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      petId: widget.petId,
-      name: _nameController.text,
-      type: _selectedType,
-      servingSize: double.parse(_servingSizeController.text),
-      unit: _selectedUnit,
-      calories: double.parse(_caloriesController.text),
-      protein: double.tryParse(_proteinController.text),
-      fat: double.tryParse(_fatController.text),
-      fiber: double.tryParse(_fiberController.text),
-      ingredients: _ingredientsController.text,
-    );
-
-    Navigator.pop(context, foodItem);
+      widget.onSave(food);
+      Navigator.of(context).pop();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: CustomCard(
+        padding: EdgeInsets.zero,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  widget.foodItem == null ? 'Add Food Item' : 'Edit Food Item',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Food Name',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter food name';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedType,
-                        decoration: const InputDecoration(
-                          labelText: 'Food Type',
-                          border: OutlineInputBorder(),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        widget.initialFood != null
+                            ? 'Edit Food'
+                            : 'Add New Food',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimaryColor,
                         ),
-                        items: _foodTypes.map((type) {
-                          return DropdownMenuItem(
-                            value: type,
-                            child: Text(type),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          _isFavorite
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          color: _isFavorite
+                              ? AppTheme.errorColor
+                              : AppTheme.textSecondaryColor,
+                        ),
+                        onPressed: () {
                           setState(() {
-                            _selectedType = value!;
+                            _isFavorite = !_isFavorite;
                           });
                         },
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: TextFormField(
-                        controller: _servingSizeController,
-                        decoration: const InputDecoration(
-                          labelText: 'Serving Size',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Required';
-                          }
-                          if (double.tryParse(value) == null) {
-                            return 'Invalid number';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedUnit,
-                        decoration: const InputDecoration(
-                          labelText: 'Unit',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: _units.map((unit) {
-                          return DropdownMenuItem(
-                            value: unit,
-                            child: Text(unit),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedUnit = value!;
-                          });
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _caloriesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Calories (per serving)',
-                    border: OutlineInputBorder(),
+                    ],
                   ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter calories';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Invalid number';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _proteinController,
-                        decoration: const InputDecoration(
-                          labelText: 'Protein (g)',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                      ),
+                  const SizedBox(height: 24),
+
+                  // Name Field
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Food Name*',
+                      hintText: 'Enter food name',
+                      prefixIcon: Icon(Icons.restaurant_menu),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _fatController,
-                        decoration: const InputDecoration(
-                          labelText: 'Fat (g)',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _fiberController,
-                        decoration: const InputDecoration(
-                          labelText: 'Fiber (g)',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _ingredientsController,
-                  decoration: const InputDecoration(
-                    labelText: 'Ingredients (optional)',
-                    border: OutlineInputBorder(),
-                    hintText: 'Enter main ingredients',
+                    validator: (value) {
+                      if (value?.isEmpty ?? true) {
+                        return 'Please enter a food name';
+                      }
+                      return null;
+                    },
                   ),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    CustomButton(
-                      onPressed: () => Navigator.pop(context),
-                      text: 'Cancel',
-                      type: ButtonType.secondary,
+                  const SizedBox(height: 16),
+
+                  // Brand Field
+                  TextFormField(
+                    controller: _brandController,
+                    decoration: const InputDecoration(
+                      labelText: 'Brand',
+                      hintText: 'Enter brand name',
+                      prefixIcon: Icon(Icons.business),
                     ),
-                    const SizedBox(width: 8),
-                    CustomButton(
-                      onPressed: _isLoading ? null : _submitForm,
-                      text: widget.foodItem == null ? 'Add' : 'Save',
-                      icon: _isLoading ? null : Icons.check,
-                      isLoading: _isLoading,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Calories Field
+                  TextFormField(
+                    controller: _caloriesController,
+                    decoration: const InputDecoration(
+                      labelText: 'Calories*',
+                      hintText: 'Enter calories per serving',
+                      prefixIcon: Icon(Icons.local_fire_department),
                     ),
-                  ],
-                ),
-              ],
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    validator: (value) {
+                      if (value?.isEmpty ?? true) {
+                        return 'Please enter calories';
+                      }
+                      if (int.tryParse(value!) == null) {
+                        return 'Please enter a valid number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Serving Size Field
+                  TextFormField(
+                    controller: _servingSizeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Serving Size*',
+                      hintText: 'e.g., 100g or 1 cup',
+                      prefixIcon: Icon(Icons.scale),
+                    ),
+                    validator: (value) {
+                      if (value?.isEmpty ?? true) {
+                        return 'Please enter serving size';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Notes Field
+                  TextFormField(
+                    controller: _notesController,
+                    decoration: const InputDecoration(
+                      labelText: 'Notes',
+                      hintText: 'Add any additional notes',
+                      prefixIcon: Icon(Icons.note),
+                    ),
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Action Buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: _handleSave,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                        ),
+                        child: const Text('Save'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -1,55 +1,114 @@
-// lib/providers/reminder_provider.dart
-
 import 'package:flutter/foundation.dart';
-import '../services/pet_service.dart';
-import '../models/pet.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../utils/logger.dart';
 import 'dart:async';
 
 class ReminderProvider with ChangeNotifier {
-  final PetService _petService = PetService();
+  final FirebaseFirestore _firestore;
+  final FirebaseAnalytics _analytics;
+  final FlutterLocalNotificationsPlugin _notifications;
+  final Logger _logger;
+
   Map<String, List<PetReminder>> _reminders = {};
   Map<String, DateTime> _lastUpdated = {};
-  Map<String, Map<String, dynamic>> _reminderAnalytics = {};
   bool _isLoading = false;
   String? _error;
-  Timer? _autoRefreshTimer;
-  Duration _cacheExpiration = const Duration(minutes: 30);
-  bool _isInitialized = false;
+  Timer? _refreshTimer;
+  Timer? _checkTimer;
+  final Duration _refreshInterval = const Duration(minutes: 15);
+  final Duration _checkInterval = const Duration(minutes: 1);
 
-  // Enhanced Getters
-  bool get isLoading => _isLoading;
-  String? get error => _error;
-  bool get isInitialized => _isInitialized;
-  Map<String, DateTime> get lastUpdated => _lastUpdated;
-
-  ReminderProvider() {
-    _setupAutoRefresh();
+  ReminderProvider({
+    FirebaseFirestore? firestore,
+    FirebaseAnalytics? analytics,
+    FlutterLocalNotificationsPlugin? notifications,
+    Logger? logger,
+  }) : 
+    _firestore = firestore ?? FirebaseFirestore.instance,
+    _analytics = analytics ?? FirebaseAnalytics.instance,
+    _notifications = notifications ?? FlutterLocalNotificationsPlugin(),
+    _logger = logger ?? Logger() {
+    _initialize();
   }
 
-  void _setupAutoRefresh() {
-    _autoRefreshTimer?.cancel();
-    _autoRefreshTimer = Timer.periodic(
-      const Duration(minutes: 15),
-      (_) => _refreshAllReminders(silent: true),
+  // Getters
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+  Map<String, List<PetReminder>> get reminders => _reminders;
+
+  Future<void> _initialize() async {
+    try {
+      await _initializeNotifications();
+      _initializeListeners();
+      _setupTimers();
+    } catch (e, stackTrace) {
+      _error = _handleError('Failed to initialize reminders', e, stackTrace);
+    }
+  }
+
+  Future<void> _initializeNotifications() async {
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+    
+    await _notifications.initialize(
+      const InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      ),
+      onDidReceiveNotificationResponse: _handleNotificationTap,
     );
   }
 
-  // Check if data needs refresh
-  bool _needsRefresh(String petId) {
-    final lastUpdate = _lastUpdated[petId];
-    if (lastUpdate == null) return true;
-    return DateTime.now().difference(lastUpdate) > _cacheExpiration;
+  void _initializeListeners() {
+    _firestore.collection('reminders')
+        .snapshots()
+        .listen(_handleReminderUpdates);
   }
 
-  // Enhanced reminder retrieval
-  Future<List<PetReminder>> getRemindersForPet(
+  void _setupTimers() {
+    _refreshTimer?.cancel();
+    _checkTimer?.cancel();
+
+    _refreshTimer = Timer.periodic(_refreshInterval, (_) => _refreshAllReminders());
+    _checkTimer = Timer.periodic(_checkInterval, (_) => _checkUpcomingReminders());
+  }
+
+  Future<void> _handleReminderUpdates(QuerySnapshot snapshot) async {
+    for (var change in snapshot.docChanges) {
+      final data = change.doc.data() as Map<String, dynamic>;
+      final petId = data['petId'] as String;
+
+      switch (change.type) {
+        case DocumentChangeType.added:
+        case DocumentChangeType.modified:
+          await loadReminders(petId, silent: true);
+          break;
+        case DocumentChangeType.removed:
+          _removeReminder(petId, change.doc.id);
+          break;
+      }
+    }
+    notifyListeners();
+  }
+
+  void _handleNotificationTap(NotificationResponse response) {
+    // Handle notification tap
+    _logger.info('Notification tapped: ${response.payload}');
+  }
+
+  Future<List<PetReminder>> getReminders(
     String petId, {
     bool forceRefresh = false,
     String? type,
     bool? isCompleted,
     DateTime? startDate,
     DateTime? endDate,
-    List<String>? assignedTo,
   }) async {
     if (forceRefresh || _needsRefresh(petId)) {
       await loadReminders(petId);
@@ -59,66 +118,202 @@ class ReminderProvider with ChangeNotifier {
 
     // Apply filters
     if (type != null) {
-      reminders = reminders.where(
-        (r) => r.type.toLowerCase() == type.toLowerCase()
-      ).toList();
+      reminders = reminders.where((r) => r.type == type).toList();
     }
-
     if (isCompleted != null) {
-      reminders = reminders.where(
-        (r) => r.isCompleted == isCompleted
-      ).toList();
+      reminders = reminders.where((r) => r.isCompleted == isCompleted).toList();
     }
-
     if (startDate != null) {
-      reminders = reminders.where(
-        (r) => r.dueDate.isAfter(startDate)
-      ).toList();
+      reminders = reminders.where((r) => r.dueDate.isAfter(startDate)).toList();
     }
-
     if (endDate != null) {
-      reminders = reminders.where(
-        (r) => r.dueDate.isBefore(endDate)
-      ).toList();
-    }
-
-    if (assignedTo != null && assignedTo.isNotEmpty) {
-      reminders = reminders.where(
-        (r) => assignedTo.any((userId) => r.assignedTo.contains(userId))
-      ).toList();
+      reminders = reminders.where((r) => r.dueDate.isBefore(endDate)).toList();
     }
 
     return reminders;
   }
 
-  // Enhanced reminder loading
-  Future<void> loadReminders(
-    String petId, {
-    bool silent = false,
-    DateTime? startDate,
-    DateTime? endDate,
+  Future<void> addReminder({
+    required String petId,
+    required String title,
+    required String type,
+    required DateTime dueDate,
+    String? description,
+    Duration? notifyBefore,
+    bool repeat = false,
+    Duration? repeatInterval,
+    Map<String, dynamic>? metadata,
   }) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final reminder = PetReminder(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        petId: petId,
+        title: title,
+        type: type,
+        description: description,
+        dueDate: dueDate,
+        notifyBefore: notifyBefore ?? const Duration(minutes: 30),
+        repeat: repeat,
+        repeatInterval: repeatInterval,
+        metadata: metadata ?? {},
+        isCompleted: false,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await _firestore.collection('reminders').add(reminder.toJson());
+
+      final reminders = _reminders[petId] ?? [];
+      reminders.add(reminder);
+      _reminders[petId] = reminders;
+
+      await _scheduleNotification(reminder);
+      _error = null;
+
+      await _analytics.logEvent(
+        name: 'reminder_added',
+        parameters: {
+          'pet_id': petId,
+          'type': type,
+        },
+      );
+
+    } catch (e, stackTrace) {
+      _error = _handleError('Failed to add reminder', e, stackTrace);
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateReminder({
+    required String reminderId,
+    required String petId,
+    String? title,
+    String? description,
+    DateTime? dueDate,
+    Duration? notifyBefore,
+    bool? repeat,
+    Duration? repeatInterval,
+    bool? isCompleted,
+    Map<String, dynamic>? metadata,
+  }) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final updates = <String, dynamic>{
+        if (title != null) 'title': title,
+        if (description != null) 'description': description,
+        if (dueDate != null) 'dueDate': dueDate.toIso8601String(),
+        if (notifyBefore != null) 'notifyBefore': notifyBefore.inMinutes,
+        if (repeat != null) 'repeat': repeat,
+        if (repeatInterval != null) 'repeatInterval': repeatInterval.inMinutes,
+        if (isCompleted != null) 'isCompleted': isCompleted,
+        if (metadata != null) 'metadata': metadata,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      await _firestore
+          .collection('reminders')
+          .doc(reminderId)
+          .update(updates);
+
+      final reminders = _reminders[petId] ?? [];
+      final index = reminders.indexWhere((r) => r.id == reminderId);
+      
+      if (index != -1) {
+        reminders[index] = reminders[index].copyWith(
+          title: title,
+          description: description,
+          dueDate: dueDate,
+          notifyBefore: notifyBefore,
+          repeat: repeat,
+          repeatInterval: repeatInterval,
+          isCompleted: isCompleted,
+          metadata: metadata,
+          updatedAt: DateTime.now(),
+        );
+        _reminders[petId] = reminders;
+
+        await _rescheduleNotification(reminders[index]);
+      }
+
+      _error = null;
+
+    } catch (e, stackTrace) {
+      _error = _handleError('Failed to update reminder', e, stackTrace);
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteReminder(String petId, String reminderId) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      await _firestore
+          .collection('reminders')
+          .doc(reminderId)
+          .delete();
+
+      await _cancelNotification(reminderId);
+      _removeReminder(petId, reminderId);
+      _error = null;
+
+    } catch (e, stackTrace) {
+      _error = _handleError('Failed to delete reminder', e, stackTrace);
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> completeReminder(String petId, String reminderId) async {
+    try {
+      await updateReminder(
+        reminderId: reminderId,
+        petId: petId,
+        isCompleted: true,
+      );
+
+      if (_shouldCreateNextReminder(reminderId)) {
+        await _createNextReminder(reminderId);
+      }
+
+    } catch (e, stackTrace) {
+      _error = _handleError('Failed to complete reminder', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<void> loadReminders(String petId, {bool silent = false}) async {
     try {
       if (!silent) {
         _isLoading = true;
         notifyListeners();
       }
 
-      final reminders = await _petService.getReminders(
-        petId,
-        startDate: startDate,
-        endDate: endDate,
-      );
+      final snapshot = await _firestore
+          .collection('reminders')
+          .where('petId', isEqualTo: petId)
+          .get();
 
-      _reminders[petId] = reminders
-          .map((data) => PetReminder.fromJson(data))
-          .toList()
-        ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
-
+      _reminders[petId] = snapshot.docs
+          .map((doc) => PetReminder.fromJson({...doc.data(), 'id': doc.id}))
+          .toList();
       _lastUpdated[petId] = DateTime.now();
-      await _updateReminderAnalytics(petId);
-      
+
       if (!silent) _error = null;
+
     } catch (e, stackTrace) {
       _error = _handleError('Failed to load reminders', e, stackTrace);
       if (!silent) rethrow;
@@ -130,265 +325,221 @@ class ReminderProvider with ChangeNotifier {
     }
   }
 
-  // Enhanced reminder addition with validation
-  Future<void> addReminder({
-    required String petId,
-    required String title,
-    required String type,
-    required DateTime dueDate,
-    required ReminderFrequency frequency,
-    String? notes,
-    bool isRecurring = false,
-    Map<String, dynamic>? recurringDetails,
-    List<String>? assignedTo,
-    Map<String, dynamic>? metadata,
-    NotificationPreference? notificationPreference,
-  }) async {
+  Future<void> _scheduleNotification(PetReminder reminder) async {
     try {
-      _isLoading = true;
-      notifyListeners();
+      final notificationTime = reminder.dueDate.subtract(reminder.notifyBefore);
+      if (notificationTime.isBefore(DateTime.now())) return;
 
-      // Validate reminder data
-      _validateReminderData(
-        title: title,
-        dueDate: dueDate,
-        frequency: frequency,
-        recurringDetails: recurringDetails,
+      await _notifications.zonedSchedule(
+        reminder.id.hashCode,
+        'Pet Care Reminder',
+        reminder.title,
+        TZDateTime.from(notificationTime, local),
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'pet_reminders',
+            'Pet Reminders',
+            channelDescription: 'Notifications for pet care reminders',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        androidAllowWhileIdle: true,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: reminder.id,
       );
 
-      // ... (continued in next part)
-      // Continuing lib/providers/reminder_provider.dart
-
-      final reminder = await _petService.addReminder(
-        petId: petId,
-        title: title,
-        type: type,
-        dueDate: dueDate,
-        frequency: frequency,
-        notes: notes,
-        isRecurring: isRecurring,
-        recurringDetails: recurringDetails,
-        assignedTo: assignedTo,
-        metadata: {
-          ...?metadata,
-          'createdAt': DateTime.now().toIso8601String(),
-          'platform': 'mobile',
-          'appVersion': await _getAppVersion(),
-        },
-        notificationPreference: notificationPreference?.toJson(),
-      );
-
-      // Update local cache
-      final reminders = _reminders[petId] ?? [];
-      reminders.add(PetReminder.fromJson(reminder));
-      _reminders[petId] = reminders..sort((a, b) => a.dueDate.compareTo(b.dueDate));
-      
-      _lastUpdated[petId] = DateTime.now();
-      await _updateReminderAnalytics(petId);
-      _error = null;
     } catch (e, stackTrace) {
-      _error = _handleError('Failed to add reminder', e, stackTrace);
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      _logger.error('Failed to schedule notification', e, stackTrace);
     }
   }
 
-  void _validateReminderData({
-    required String title,
-    required DateTime dueDate,
-    required ReminderFrequency frequency,
-    Map<String, dynamic>? recurringDetails,
-  }) {
-    if (title.isEmpty) {
-      throw ReminderException('Reminder title is required');
-    }
-    
-    if (dueDate.isBefore(DateTime.now())) {
-      throw ReminderException('Due date cannot be in the past');
-    }
-
-    if (frequency != ReminderFrequency.once && recurringDetails == null) {
-      throw ReminderException('Recurring details required for recurring reminders');
+  Future<void> _rescheduleNotification(PetReminder reminder) async {
+    await _cancelNotification(reminder.id);
+    if (!reminder.isCompleted) {
+      await _scheduleNotification(reminder);
     }
   }
 
-  // Enhanced reminder completion with smart rescheduling
-  Future<void> completeReminder({
-    required String petId,
-    required String reminderId,
-    String? completionNotes,
-    DateTime? completedAt,
-    Map<String, dynamic>? completionMetadata,
-  }) async {
-    try {
-      _isLoading = true;
-      notifyListeners();
+  Future<void> _cancelNotification(String reminderId) async {
+    await _notifications.cancel(reminderId.hashCode);
+  }
 
-      final reminder = _reminders[petId]?.firstWhere(
-        (r) => r.id == reminderId,
-        orElse: () => throw ReminderException('Reminder not found'),
-      );
+  void _removeReminder(String petId, String reminderId) {
+    final reminders = _reminders[petId] ?? [];
+    reminders.removeWhere((r) => r.id == reminderId);
+    _reminders[petId] = reminders;
+    notifyListeners();
+  }
 
-      await _petService.updateReminder(
-        petId: petId,
-        reminderId: reminderId,
-        isCompleted: true,
-        completedAt: completedAt ?? DateTime.now(),
-        notes: completionNotes,
-        metadata: {
-          ...?completionMetadata,
-          'completedAt': DateTime.now().toIso8601String(),
-          'completionStatus': 'manual',
-        },
-      );
-
-      if (reminder?.isRecurring ?? false) {
-        await _scheduleNextRecurrence(reminder!, completedAt);
+  Future<void> _refreshAllReminders({bool silent = true}) async {
+    for (var petId in _reminders.keys) {
+      if (_needsRefresh(petId)) {
+        await loadReminders(petId, silent: silent);
       }
-
-      await _checkComplianceAndNotify(petId, reminder!);
-      await loadReminders(petId);
-      _error = null;
-    } catch (e, stackTrace) {
-      _error = _handleError('Failed to complete reminder', e, stackTrace);
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
   }
 
-  Future<void> _scheduleNextRecurrence(
-    PetReminder reminder,
-    DateTime? completedAt,
-  ) async {
-    final nextDate = _calculateNextOccurrence(
-      reminder.dueDate,
-      reminder.frequency,
-      reminder.recurringDetails,
-      completedAt,
+  Future<void> _checkUpcomingReminders() async {
+    final now = DateTime.now();
+    for (var reminders in _reminders.values) {
+      for (var reminder in reminders) {
+        if (!reminder.isCompleted &&
+            reminder.dueDate.difference(now) <= reminder.notifyBefore) {
+          await _scheduleNotification(reminder);
+        }
+      }
+    }
+  }
+
+  bool _shouldCreateNextReminder(String reminderId) {
+    final reminder = _findReminderById(reminderId);
+    return reminder?.repeat == true && reminder?.repeatInterval != null;
+  }
+
+  Future<void> _createNextReminder(String reminderId) async {
+    final reminder = _findReminderById(reminderId);
+    if (reminder == null) return;
+
+    final nextDueDate = reminder.dueDate.add(reminder.repeatInterval!);
+    await addReminder(
+      petId: reminder.petId,
+      title: reminder.title,
+      type: reminder.type,
+      description: reminder.description,
+      dueDate: nextDueDate,
+      notifyBefore: reminder.notifyBefore,
+      repeat: reminder.repeat,
+      repeatInterval: reminder.repeatInterval,
+      metadata: reminder.metadata,
     );
+  }
 
-    if (nextDate != null) {
-      await addReminder(
-        petId: reminder.petId,
-        title: reminder.title,
-        type: reminder.type,
-        dueDate: nextDate,
-        frequency: reminder.frequency,
-        notes: reminder.notes,
-        isRecurring: true,
-        recurringDetails: reminder.recurringDetails,
-        assignedTo: reminder.assignedTo,
-        notificationPreference: reminder.notificationPreference,
+  PetReminder? _findReminderById(String reminderId) {
+    for (var reminders in _reminders.values) {
+      final reminder = reminders.firstWhere(
+        (r) => r.id == reminderId,
+        orElse: () => null as PetReminder,
       );
+      if (reminder != null) return reminder;
     }
+    return null;
   }
 
-  DateTime? _calculateNextOccurrence(
-    DateTime currentDate,
-    ReminderFrequency frequency,
-    Map<String, dynamic>? recurringDetails,
-    DateTime? completedAt,
-  ) {
-    final baseDate = completedAt ?? currentDate;
-    
-    switch (frequency) {
-      case ReminderFrequency.daily:
-        return _calculateNextDaily(baseDate, recurringDetails);
-      case ReminderFrequency.weekly:
-        return _calculateNextWeekly(baseDate, recurringDetails);
-      case ReminderFrequency.monthly:
-        return _calculateNextMonthly(baseDate, recurringDetails);
-      case ReminderFrequency.yearly:
-        return _calculateNextYearly(baseDate, recurringDetails);
-      default:
-        return null;
-    }
-  }
-
-  // Enhanced analytics methods
-  Future<void> _updateReminderAnalytics(String petId) async {
-    try {
-      final reminders = _reminders[petId] ?? [];
-      
-      _reminderAnalytics[petId] = {
-        'overview': {
-          'total': reminders.length,
-          'completed': reminders.where((r) => r.isCompleted).length,
-          'overdue': getOverdueReminders(petId).length,
-          'upcoming': getUpcomingReminders(petId).length,
-        },
-        'compliance': _calculateComplianceMetrics(reminders),
-        'categories': _analyzeReminderCategories(reminders),
-        'timing': _analyzeReminderTiming(reminders),
-        'assignments': _analyzeAssignments(reminders),
-        'trends': await _analyzeComplianceTrends(petId),
-      };
-    } catch (e, stackTrace) {
-      _error = _handleError('Failed to update analytics', e, stackTrace);
-    }
-  }
-
-  Map<String, dynamic> generateReminderReport(String petId) {
-    final analytics = _reminderAnalytics[petId];
-    if (analytics == null) return {};
-
-    return {
-      'summary': analytics['overview'],
-      'compliance': analytics['compliance'],
-      'analysis': {
-        'categories': analytics['categories'],
-        'timing': analytics['timing'],
-        'assignments': analytics['assignments'],
-      },
-      'trends': analytics['trends'],
-      'recommendations': _generateRecommendations(analytics),
-      'timestamp': DateTime.now().toIso8601String(),
-    };
+  bool _needsRefresh(String petId) {
+    final lastUpdate = _lastUpdated[petId];
+    if (lastUpdate == null) return true;
+    return DateTime.now().difference(lastUpdate) > _refreshInterval;
   }
 
   String _handleError(String operation, dynamic error, StackTrace stackTrace) {
-    debugPrint('ReminderProvider Error: $operation');
-    debugPrint('Error: $error');
-    debugPrint('StackTrace: $stackTrace');
+    _logger.error(operation, error, stackTrace);
     return 'Failed to $operation: ${error.toString()}';
   }
 
   @override
   void dispose() {
-    _autoRefreshTimer?.cancel();
+    _refreshTimer?.cancel();
+    _checkTimer?.cancel();
     super.dispose();
   }
 }
 
-class ReminderException implements Exception {
-  final String message;
-  ReminderException(this.message);
+class PetReminder {
+  final String id;
+  final String petId;
+  final String title;
+  final String type;
+  final String? description;
+  final DateTime dueDate;
+  final Duration notifyBefore;
+  final bool repeat;
+  final Duration? repeatInterval;
+  final bool isCompleted;
+  final Map<String, dynamic> metadata;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
-  @override
-  String toString() => message;
-}
-
-class NotificationPreference {
-  final bool enabled;
-  final List<Duration> remindBefore;
-  final String? sound;
-  final Map<String, dynamic>? customSettings;
-
-  NotificationPreference({
-    this.enabled = true,
-    this.remindBefore = const [Duration(hours: 24)],
-    this.sound,
-    this.customSettings,
+  PetReminder({
+    required this.id,
+    required this.petId,
+    required this.title,
+    required this.type,
+    this.description,
+    required this.dueDate,
+    required this.notifyBefore,
+    required this.repeat,
+    this.repeatInterval,
+    required this.isCompleted,
+    required this.metadata,
+    required this.createdAt,
+    required this.updatedAt,
   });
 
+  PetReminder copyWith({
+    String? title,
+    String? description,
+    DateTime? dueDate,
+    Duration? notifyBefore,
+    bool? repeat,
+    Duration? repeatInterval,
+    bool? isCompleted,
+    Map<String, dynamic>? metadata,
+    DateTime? updatedAt,
+  }) {
+    return PetReminder(
+      id: id,
+      petId: petId,
+      title: title ?? this.title,
+      type: type,
+      description: description ?? this.description,
+      dueDate: dueDate ?? this.dueDate,
+      notifyBefore: notifyBefore ?? this.notifyBefore,
+      repeat: repeat ?? this.repeat,
+      repeatInterval: repeatInterval ?? this.repeatInterval,
+      isCompleted: isCompleted ?? this.isCompleted,
+      metadata: metadata ?? this.metadata,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
-    'enabled': enabled,
-    'remindBefore': remindBefore.map((d) => d.inMinutes).toList(),
-    'sound': sound,
-    'customSettings': customSettings,
+    'petId': petId,
+    'title': title,
+    'type': type,
+    'description': description,
+    'dueDate': dueDate.toIso8601String(),
+    'notifyBefore': notifyBefore.inMinutes,
+    'repeat': repeat,
+    'repeatInterval': repeatInterval?.inMinutes,
+    'isCompleted': isCompleted,
+    'metadata': metadata,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
   };
+
+  factory PetReminder.fromJson(Map<String, dynamic> json) => PetReminder(
+    id: json['id'],
+    petId: json['petId'],
+    title: json['title'],
+    type: json['type'],
+    description: json['description'],
+    dueDate: DateTime.parse(json['dueDate']),
+    notifyBefore: Duration(minutes: json['notifyBefore']),
+    repeat: json['repeat'],
+    repeatInterval: json['repeatInterval'] != null
+        ? Duration(minutes: json['repeatInterval'])
+        : null,
+    isCompleted: json['isCompleted'],
+    metadata: json['metadata'] ?? {},
+    createdAt: DateTime.parse(json['createdAt']),
+    updatedAt: DateTime.parse(json['updatedAt']),
+  );
 }

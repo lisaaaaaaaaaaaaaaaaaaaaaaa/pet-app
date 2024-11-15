@@ -1,48 +1,33 @@
-// lib/models/pain_record.dart
-
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PainRecord {
   final String id;
   final String petId;
   final DateTime date;
-  final int painLevel; // 1-10 scale
+  final int painLevel;
   final String location;
   final List<String> symptoms;
-  final String description;
+  final String? notes;
   final List<String> triggers;
-  final List<String> reliefMethods;
-  final bool affectsMobility;
-  final bool affectsAppetite;
-  final bool affectsSleep;
-  final String notes;
-  final List<String> medications;
-  // New premium features
-  final String recordedBy;
-  final String? verifiedBy;
-  final DateTime? verifiedAt;
-  final Map<String, dynamic> painCharacteristics;
-  final Map<String, dynamic> associatedConditions;
-  final Map<String, int> activityLimitations;
-  final Map<String, dynamic> behavioralChanges;
-  final List<String> environmentalFactors;
-  final Map<String, dynamic> treatmentResponses;
-  final Map<String, dynamic> painPattern;
-  final List<String> aggravatingFactors;
-  final List<String> alleviatingFactors;
-  final Map<String, dynamic> moodImpact;
-  final Map<String, dynamic> socialImpact;
-  final Map<String, dynamic> qualityOfLife;
-  final List<String> images;
-  final Map<String, dynamic> physicalExamFindings;
-  final Map<String, dynamic> diagnosticResults;
-  final List<String> recommendedInterventions;
-  final Map<String, dynamic> painHistory;
-  final bool requiresImmediateAttention;
-  final Map<String, dynamic> vetConsultation;
-  final List<String> preventiveMeasures;
-  final Map<String, dynamic> recoveryProgress;
-  final DateTime? nextAssessmentDate;
+  final Duration? duration;
+  final String? medication;
+  final bool wasRelieved;
+  // Enhanced fields
+  final String? createdBy;
+  final DateTime createdAt;
+  final bool isPremium;
+  final List<String>? attachments;
+  final Map<String, dynamic>? metadata;
+  final Map<String, dynamic>? behavioralChanges;
+  final List<String>? interventions;
+  final Map<String, dynamic>? activityLimitations;
+  final String? veterinaryConsult;
+  final Map<String, dynamic>? environmentalFactors;
+  final List<String>? associatedConditions;
+  final Map<String, dynamic>? treatmentResponse;
+  final PainType painType;
+  final Map<String, dynamic>? mobilityImpact;
 
   PainRecord({
     required this.id,
@@ -51,41 +36,26 @@ class PainRecord {
     required this.painLevel,
     required this.location,
     this.symptoms = const [],
-    required this.description,
+    this.notes,
     this.triggers = const [],
-    this.reliefMethods = const [],
-    this.affectsMobility = false,
-    this.affectsAppetite = false,
-    this.affectsSleep = false,
-    this.notes = '',
-    this.medications = const [],
-    // New premium features
-    required this.recordedBy,
-    this.verifiedBy,
-    this.verifiedAt,
-    this.painCharacteristics = const {},
-    this.associatedConditions = const {},
-    this.activityLimitations = const {},
-    this.behavioralChanges = const {},
-    this.environmentalFactors = const [],
-    this.treatmentResponses = const {},
-    this.painPattern = const {},
-    this.aggravatingFactors = const [],
-    this.alleviatingFactors = const [],
-    this.moodImpact = const {},
-    this.socialImpact = const {},
-    this.qualityOfLife = const {},
-    this.images = const [],
-    this.physicalExamFindings = const {},
-    this.diagnosticResults = const {},
-    this.recommendedInterventions = const [],
-    this.painHistory = const {},
-    this.requiresImmediateAttention = false,
-    this.vetConsultation = const {},
-    this.preventiveMeasures = const [],
-    this.recoveryProgress = const {},
-    this.nextAssessmentDate,
-  });
+    this.duration,
+    this.medication,
+    this.wasRelieved = false,
+    this.createdBy,
+    DateTime? createdAt,
+    this.isPremium = false,
+    this.attachments,
+    this.metadata,
+    this.behavioralChanges,
+    this.interventions,
+    this.activityLimitations,
+    this.veterinaryConsult,
+    this.environmentalFactors,
+    this.associatedConditions,
+    this.treatmentResponse,
+    this.painType = PainType.acute,
+    this.mobilityImpact,
+  }) : this.createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {
@@ -95,40 +65,25 @@ class PainRecord {
       'painLevel': painLevel,
       'location': location,
       'symptoms': symptoms,
-      'description': description,
-      'triggers': triggers,
-      'reliefMethods': reliefMethods,
-      'affectsMobility': affectsMobility,
-      'affectsAppetite': affectsAppetite,
-      'affectsSleep': affectsSleep,
       'notes': notes,
-      'medications': medications,
-      // New premium features
-      'recordedBy': recordedBy,
-      'verifiedBy': verifiedBy,
-      'verifiedAt': verifiedAt?.toIso8601String(),
-      'painCharacteristics': painCharacteristics,
-      'associatedConditions': associatedConditions,
-      'activityLimitations': activityLimitations,
+      'triggers': triggers,
+      'duration': duration?.inMinutes,
+      'medication': medication,
+      'wasRelieved': wasRelieved,
+      'createdBy': createdBy,
+      'createdAt': createdAt.toIso8601String(),
+      'isPremium': isPremium,
+      'attachments': attachments,
+      'metadata': metadata,
       'behavioralChanges': behavioralChanges,
+      'interventions': interventions,
+      'activityLimitations': activityLimitations,
+      'veterinaryConsult': veterinaryConsult,
       'environmentalFactors': environmentalFactors,
-      'treatmentResponses': treatmentResponses,
-      'painPattern': painPattern,
-      'aggravatingFactors': aggravatingFactors,
-      'alleviatingFactors': alleviatingFactors,
-      'moodImpact': moodImpact,
-      'socialImpact': socialImpact,
-      'qualityOfLife': qualityOfLife,
-      'images': images,
-      'physicalExamFindings': physicalExamFindings,
-      'diagnosticResults': diagnosticResults,
-      'recommendedInterventions': recommendedInterventions,
-      'painHistory': painHistory,
-      'requiresImmediateAttention': requiresImmediateAttention,
-      'vetConsultation': vetConsultation,
-      'preventiveMeasures': preventiveMeasures,
-      'recoveryProgress': recoveryProgress,
-      'nextAssessmentDate': nextAssessmentDate?.toIso8601String(),
+      'associatedConditions': associatedConditions,
+      'treatmentResponse': treatmentResponse,
+      'painType': painType.toString(),
+      'mobilityImpact': mobilityImpact,
     };
   }
 
@@ -140,105 +95,100 @@ class PainRecord {
       painLevel: json['painLevel'],
       location: json['location'],
       symptoms: List<String>.from(json['symptoms'] ?? []),
-      description: json['description'],
+      notes: json['notes'],
       triggers: List<String>.from(json['triggers'] ?? []),
-      reliefMethods: List<String>.from(json['reliefMethods'] ?? []),
-      affectsMobility: json['affectsMobility'] ?? false,
-      affectsAppetite: json['affectsAppetite'] ?? false,
-      affectsSleep: json['affectsSleep'] ?? false,
-      notes: json['notes'] ?? '',
-      medications: List<String>.from(json['medications'] ?? []),
-      // New premium features
-      recordedBy: json['recordedBy'],
-      verifiedBy: json['verifiedBy'],
-      verifiedAt: json['verifiedAt'] != null 
-          ? DateTime.parse(json['verifiedAt']) 
+      duration: json['duration'] != null 
+          ? Duration(minutes: json['duration'])
           : null,
-      painCharacteristics: 
-          Map<String, dynamic>.from(json['painCharacteristics'] ?? {}),
-      associatedConditions: 
-          Map<String, dynamic>.from(json['associatedConditions'] ?? {}),
-      activityLimitations: 
-          Map<String, int>.from(json['activityLimitations'] ?? {}),
-      behavioralChanges: 
-          Map<String, dynamic>.from(json['behavioralChanges'] ?? {}),
-      environmentalFactors: 
-          List<String>.from(json['environmentalFactors'] ?? []),
-      treatmentResponses: 
-          Map<String, dynamic>.from(json['treatmentResponses'] ?? {}),
-      painPattern: Map<String, dynamic>.from(json['painPattern'] ?? {}),
-      aggravatingFactors: List<String>.from(json['aggravatingFactors'] ?? []),
-      alleviatingFactors: List<String>.from(json['alleviatingFactors'] ?? []),
-      moodImpact: Map<String, dynamic>.from(json['moodImpact'] ?? {}),
-      socialImpact: Map<String, dynamic>.from(json['socialImpact'] ?? {}),
-      qualityOfLife: Map<String, dynamic>.from(json['qualityOfLife'] ?? {}),
-      images: List<String>.from(json['images'] ?? []),
-      physicalExamFindings: 
-          Map<String, dynamic>.from(json['physicalExamFindings'] ?? {}),
-      diagnosticResults: 
-          Map<String, dynamic>.from(json['diagnosticResults'] ?? {}),
-      recommendedInterventions: 
-          List<String>.from(json['recommendedInterventions'] ?? []),
-      painHistory: Map<String, dynamic>.from(json['painHistory'] ?? {}),
-      requiresImmediateAttention: 
-          json['requiresImmediateAttention'] ?? false,
-      vetConsultation: Map<String, dynamic>.from(json['vetConsultation'] ?? {}),
-      preventiveMeasures: List<String>.from(json['preventiveMeasures'] ?? []),
-      recoveryProgress: Map<String, dynamic>.from(json['recoveryProgress'] ?? {}),
-      nextAssessmentDate: json['nextAssessmentDate'] != null 
-          ? DateTime.parse(json['nextAssessmentDate']) 
+      medication: json['medication'],
+      wasRelieved: json['wasRelieved'] ?? false,
+      createdBy: json['createdBy'],
+      createdAt: json['createdAt'] != null 
+          ? DateTime.parse(json['createdAt'])
           : null,
+      isPremium: json['isPremium'] ?? false,
+      attachments: json['attachments'] != null 
+          ? List<String>.from(json['attachments'])
+          : null,
+      metadata: json['metadata'],
+      behavioralChanges: json['behavioralChanges'],
+      interventions: json['interventions'] != null 
+          ? List<String>.from(json['interventions'])
+          : null,
+      activityLimitations: json['activityLimitations'],
+      veterinaryConsult: json['veterinaryConsult'],
+      environmentalFactors: json['environmentalFactors'],
+      associatedConditions: json['associatedConditions'] != null 
+          ? List<String>.from(json['associatedConditions'])
+          : null,
+      treatmentResponse: json['treatmentResponse'],
+      painType: PainType.values.firstWhere(
+        (e) => e.toString() == json['painType'],
+        orElse: () => PainType.acute,
+      ),
+      mobilityImpact: json['mobilityImpact'],
     );
   }
 
-  // Helper methods
-  bool isVerified() {
-    return verifiedBy != null && verifiedAt != null;
-  }
-
-  bool isPainSevere() {
-    return painLevel >= 7;
-  }
-
-  bool needsVetAttention() {
-    return isPainSevere() || requiresImmediateAttention;
-  }
-
-  List<String> getSignificantImpacts() {
-    final impacts = <String>[];
-    if (affectsMobility) impacts.add('Mobility');
-    if (affectsAppetite) impacts.add('Appetite');
-    if (affectsSleep) impacts.add('Sleep');
-    return impacts;
-  }
-
-  Map<String, dynamic> getTreatmentEffectiveness() {
-    final effectiveness = <String, dynamic>{};
-    for (var treatment in treatmentResponses.entries) {
-      effectiveness[treatment.key] = {
-        'effective': treatment.value['painReduction'] > 3,
-        'reduction': treatment.value['painReduction'],
-        'duration': treatment.value['duration'],
-      };
-    }
-    return effectiveness;
-  }
-
-  bool hasImprovedOverTime() {
-    if (painHistory.isEmpty) return false;
-    final previousPain = painHistory.values.last['level'] as int;
-    return painLevel < previousPain;
-  }
-
-  String getPainCategory() {
+  String getPainSeverity() {
     if (painLevel <= 3) return 'Mild';
     if (painLevel <= 6) return 'Moderate';
     return 'Severe';
   }
 
-  bool needsFollowUp() {
-    return nextAssessmentDate != null && 
-           DateTime.now().isBefore(nextAssessmentDate!);
+  String getDurationFormatted() {
+    if (duration == null) return 'N/A';
+    final hours = duration!.inHours;
+    final minutes = duration!.inMinutes.remainder(60);
+    if (hours > 0) {
+      return '$hours hr ${minutes > 0 ? '$minutes min' : ''}';
+    }
+    return '$minutes min';
+  }
+
+  bool hasSymptom(String symptom) => 
+      symptoms.contains(symptom.toLowerCase());
+
+  bool hasTrigger(String trigger) => 
+      triggers.contains(trigger.toLowerCase());
+
+  bool hasIntervention(String intervention) => 
+      interventions?.contains(intervention) ?? false;
+
+  bool hasCondition(String condition) => 
+      associatedConditions?.contains(condition) ?? false;
+
+  bool canEdit(String userId) => createdBy == userId || !isPremium;
+
+  bool get isRecent => 
+      date.isAfter(DateTime.now().subtract(const Duration(days: 1)));
+
+  Map<String, dynamic> getMobilityAssessment() {
+    if (mobilityImpact == null) return {};
+    
+    return {
+      'walking': mobilityImpact!['walking'] ?? 'normal',
+      'standing': mobilityImpact!['standing'] ?? 'normal',
+      'jumping': mobilityImpact!['jumping'] ?? 'normal',
+      'climbing': mobilityImpact!['climbing'] ?? 'normal',
+      'overall': mobilityImpact!['overall'] ?? 'normal',
+    };
+  }
+
+  bool requiresVeterinaryAttention() =>
+      painLevel >= 7 || 
+      duration?.inHours ?? 0 > 24 || 
+      !wasRelieved;
+
+  Map<String, dynamic> getTreatmentEffectiveness() {
+    if (treatmentResponse == null) return {};
+    
+    return {
+      'medication': treatmentResponse!['medicationEffective'] ?? false,
+      'interventions': treatmentResponse!['interventionsEffective'] ?? false,
+      'timeToRelief': treatmentResponse!['timeToRelief'],
+      'sideEffects': treatmentResponse!['sideEffects'] ?? [],
+    };
   }
 }
 
@@ -246,16 +196,33 @@ enum PainType {
   acute,
   chronic,
   intermittent,
-  progressive
+  referred,
+  neuropathic
 }
 
-enum PainCharacteristic {
-  sharp,
-  dull,
-  throbbing,
-  burning,
-  stabbing,
-  aching,
-  cramping,
-  other
+extension PainTypeExtension on PainType {
+  String get displayName {
+    switch (this) {
+      case PainType.acute: return 'Acute';
+      case PainType.chronic: return 'Chronic';
+      case PainType.intermittent: return 'Intermittent';
+      case PainType.referred: return 'Referred';
+      case PainType.neuropathic: return 'Neuropathic';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case PainType.acute: 
+        return 'Sudden onset, typically from injury or illness';
+      case PainType.chronic: 
+        return 'Persistent pain lasting more than 3 months';
+      case PainType.intermittent: 
+        return 'Pain that comes and goes';
+      case PainType.referred: 
+        return 'Pain felt in a location other than the source';
+      case PainType.neuropathic: 
+        return 'Pain caused by nerve damage or dysfunction';
+    }
+  }
 }

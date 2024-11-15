@@ -1,436 +1,422 @@
-// lib/providers/behavior_tracking_provider.dart
-
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import '../services/pet_service.dart';
 import '../models/pet.dart';
+import '../utils/logger.dart';
+import 'dart:async';
+import 'dart:math';
 
 class BehaviorTrackingProvider with ChangeNotifier {
-  final PetService _petService = PetService();
+  final PetService _petService;
+  final FirebaseFirestore _firestore;
+  final FirebaseAnalytics _analytics;
+  final Logger _logger;
+
   Map<String, List<BehaviorLog>> _behaviorLogs = {};
-  Map<String, DateTime> _lastUpdated = {};
   Map<String, Map<String, dynamic>> _behaviorAnalytics = {};
+  Map<String, DateTime> _lastUpdated = {};
+  Map<String, bool> _isRefreshing = {};
   bool _isLoading = false;
   String? _error;
-  Duration _cacheExpiration = const Duration(hours: 1);
+  Timer? _refreshTimer;
+  final Duration _cacheExpiration;
+  final Duration _refreshInterval;
+
+  BehaviorTrackingProvider({
+    PetService? petService,
+    FirebaseFirestore? firestore,
+    FirebaseAnalytics? analytics,
+    Logger? logger,
+    Duration? cacheExpiration,
+    Duration? refreshInterval,
+  }) : 
+    _petService = petService ?? PetService(),
+    _firestore = firestore ?? FirebaseFirestore.instance,
+    _analytics = analytics ?? FirebaseAnalytics.instance,
+    _logger = logger ?? Logger(),
+    _cacheExpiration = cacheExpiration ?? const Duration(hours: 1),
+    _refreshInterval = refreshInterval ?? const Duration(minutes: 15) {
+    _setupPeriodicRefresh();
+    _initializeFirebaseListeners();
+  }
 
   // Getters
   bool get isLoading => _isLoading;
   String? get error => _error;
   Map<String, DateTime> get lastUpdated => _lastUpdated;
 
-  // Check if data needs refresh
-  bool _needsRefresh(String petId) {
-    final lastUpdate = _lastUpdated[petId];
-    if (lastUpdate == null) return true;
-    return DateTime.now().difference(lastUpdate) > _cacheExpiration;
+  void _setupPeriodicRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(_refreshInterval, (_) {
+      _refreshAllBehaviorLogs(silent: true);
+    });
   }
 
-  // Get logs with optional refresh
-  Future<List<BehaviorLog>> getLogsForPet(
+  void _initializeFirebaseListeners() {
+    _firestore.collection('behavior_logs')
+        .snapshots()
+        .listen(_handleBehaviorUpdates);
+  }
+
+  Future<void> _handleBehaviorUpdates(QuerySnapshot snapshot) async {
+    for (var change in snapshot.docChanges) {
+      final data = change.doc.data() as Map<String, dynamic>;
+      final petId = data['petId'] as String;
+
+      switch (change.type) {
+        case DocumentChangeType.added:
+        case DocumentChangeType.modified:
+          await loadBehaviorLogs(petId, silent: true);
+          break;
+        case DocumentChangeType.removed:
+          _removeBehaviorLog(petId, change.doc.id);
+          break;
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<List<BehaviorLog>> getBehaviorLogs(
     String petId, {
     bool forceRefresh = false,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? behaviorType,
+    String? severity,
+    bool? isResolved,
   }) async {
     if (forceRefresh || _needsRefresh(petId)) {
       await loadBehaviorLogs(petId);
     }
-    return _behaviorLogs[petId] ?? [];
-  }
 
-  // Enhanced load behavior logs
-  Future<void> loadBehaviorLogs(
-    String petId, {
-    DateTime? startDate,
-    DateTime? endDate,
-    bool silent = false,
-  }) async {
-    if (!silent) {
-      _isLoading = true;
-      notifyListeners();
+    var logs = _behaviorLogs[petId] ?? [];
+
+    // Apply filters
+    if (startDate != null) {
+      logs = logs.where((log) => log.timestamp.isAfter(startDate)).toList();
+    }
+    if (endDate != null) {
+      logs = logs.where((log) => log.timestamp.isBefore(endDate)).toList();
+    }
+    if (behaviorType != null) {
+      logs = logs.where((log) => log.type == behaviorType).toList();
+    }
+    if (severity != null) {
+      logs = logs.where((log) => log.severity == severity).toList();
+    }
+    if (isResolved != null) {
+      logs = logs.where((log) => log.isResolved == isResolved).toList();
     }
 
-    try {
-      final logs = await _petService.getBehaviorLogs(
-        petId: petId,
-        startDate: startDate ?? DateTime.now().subtract(const Duration(days: 90)),
-        endDate: endDate ?? DateTime.now(),
-      );
-
-      _behaviorLogs[petId] = logs
-          .map((data) => BehaviorLog.fromJson(data))
-          .toList()
-        ..sort((a, b) => b.date.compareTo(a.date));
-
-      _lastUpdated[petId] = DateTime.now();
-      await _updateAnalytics(petId);
-      _error = null;
-    } catch (e, stackTrace) {
-      _error = _handleError(e, stackTrace);
-    } finally {
-      if (!silent) {
-        _isLoading = false;
-        notifyListeners();
-      }
-    }
+    return logs;
   }
 
-  // Enhanced add behavior log
   Future<void> addBehaviorLog({
     required String petId,
-    required String behavior,
-    required String context,
+    required String type,
+    required String description,
+    String? severity,
     String? trigger,
     String? resolution,
-    List<String>? interventions,
-    bool wasSuccessful = false,
     Map<String, dynamic>? metadata,
     List<String>? tags,
-    String? severity,
-    Duration? duration,
   }) async {
     try {
       _isLoading = true;
       notifyListeners();
 
-      final newLog = await _petService.addBehaviorLog(
+      final log = BehaviorLog(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
         petId: petId,
-        behavior: behavior,
-        context: context,
-        date: DateTime.now(),
+        type: type,
+        description: description,
+        severity: severity ?? 'normal',
         trigger: trigger,
         resolution: resolution,
-        interventions: interventions,
-        wasSuccessful: wasSuccessful,
-        metadata: metadata,
-        tags: tags,
-        severity: severity,
-        duration: duration,
+        timestamp: DateTime.now(),
+        metadata: metadata ?? {},
+        tags: tags ?? [],
+        isResolved: false,
       );
 
-      // Update local cache
+      await _firestore.collection('behavior_logs').add(log.toJson());
+      
       final logs = _behaviorLogs[petId] ?? [];
-      logs.insert(0, BehaviorLog.fromJson(newLog));
+      logs.insert(0, log);
       _behaviorLogs[petId] = logs;
 
-      await _updateAnalytics(petId);
+      await _updateBehaviorAnalytics(petId);
+      
       _error = null;
+      
+      // Track event
+      await _analytics.logEvent(
+        name: 'behavior_log_added',
+        parameters: {
+          'pet_id': petId,
+          'behavior_type': type,
+          'severity': severity,
+        },
+      );
+
     } catch (e, stackTrace) {
-      _error = _handleError(e, stackTrace);
+      _error = _handleError('Failed to add behavior log', e, stackTrace);
+      _logger.error('Failed to add behavior log', e, stackTrace);
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // Get filtered logs
-  List<BehaviorLog> getFilteredLogs(
-    String petId, {
-    String? behaviorType,
-    bool? wasSuccessful,
-    String? trigger,
-    DateTime? startDate,
-    DateTime? endDate,
-    List<String>? tags,
+  Future<void> updateBehaviorLog({
+    required String petId,
+    required String logId,
+    String? type,
+    String? description,
     String? severity,
-  }) {
-    final logs = _behaviorLogs[petId] ?? [];
-    return logs.where((log) {
-      if (behaviorType != null && 
-          log.behavior.toLowerCase() != behaviorType.toLowerCase()) {
-        return false;
-      }
-      if (wasSuccessful != null && log.wasSuccessful != wasSuccessful) {
-        return false;
-      }
-      if (trigger != null && log.trigger != trigger) {
-        return false;
-      }
-      if (startDate != null && log.date.isBefore(startDate)) {
-        return false;
-      }
-      if (endDate != null && log.date.isAfter(endDate)) {
-        return false;
-      }
-      if (tags != null && !tags.every((tag) => log.tags.contains(tag))) {
-        return false;
-      }
-      if (severity != null && log.severity != severity) {
-        return false;
-      }
-      return true;
-    }).toList();
-  }
-
-  // Enhanced behavior trends calculation
-  Future<Map<String, dynamic>> calculateBehaviorTrends(
-    String petId, {
-    bool forceRefresh = false,
+    String? trigger,
+    String? resolution,
+    bool? isResolved,
+    Map<String, dynamic>? metadata,
+    List<String>? tags,
   }) async {
-    if (forceRefresh || _needsRefresh(petId)) {
-      await _updateAnalytics(petId);
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final updates = <String, dynamic>{
+        if (type != null) 'type': type,
+        if (description != null) 'description': description,
+        if (severity != null) 'severity': severity,
+        if (trigger != null) 'trigger': trigger,
+        if (resolution != null) 'resolution': resolution,
+        if (isResolved != null) 'isResolved': isResolved,
+        if (metadata != null) 'metadata': metadata,
+        if (tags != null) 'tags': tags,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      };
+
+      await _firestore
+          .collection('behavior_logs')
+          .doc(logId)
+          .update(updates);
+
+      // Update local cache
+      final logs = _behaviorLogs[petId] ?? [];
+      final index = logs.indexWhere((log) => log.id == logId);
+      if (index != -1) {
+        logs[index] = logs[index].copyWith(
+          type: type,
+          description: description,
+          severity: severity,
+          trigger: trigger,
+          resolution: resolution,
+          isResolved: isResolved,
+          metadata: metadata,
+          tags: tags,
+        );
+        _behaviorLogs[petId] = logs;
+      }
+
+      await _updateBehaviorAnalytics(petId);
+      _error = null;
+
+    } catch (e, stackTrace) {
+      _error = _handleError('Failed to update behavior log', e, stackTrace);
+      _logger.error('Failed to update behavior log', e, stackTrace);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-    return _behaviorAnalytics[petId] ?? _getEmptyTrends();
   }
 
-  Map<String, dynamic> _getEmptyTrends() {
-    return {
-      'totalLogs': 0,
-      'successRate': 0.0,
-      'commonBehaviors': <String, int>{},
-      'commonTriggers': <String, int>{},
-      'trend': 'insufficient_data',
-      'severityDistribution': <String, int>{},
-      'timeOfDayDistribution': <String, int>{},
-      'averageDuration': Duration.zero,
-      'behaviorPatterns': [],
-    };
-  }
-// Continuing lib/providers/behavior_tracking_provider.dart
+  Future<void> deleteBehaviorLog(String petId, String logId) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
 
-  // Update analytics
-  Future<void> _updateAnalytics(String petId) async {
+      await _firestore
+          .collection('behavior_logs')
+          .doc(logId)
+          .delete();
+
+      _removeBehaviorLog(petId, logId);
+      await _updateBehaviorAnalytics(petId);
+      _error = null;
+
+    } catch (e, stackTrace) {
+      _error = _handleError('Failed to delete behavior log', e, stackTrace);
+      _logger.error('Failed to delete behavior log', e, stackTrace);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void _removeBehaviorLog(String petId, String logId) {
     final logs = _behaviorLogs[petId] ?? [];
-    if (logs.isEmpty) {
-      _behaviorAnalytics[petId] = _getEmptyTrends();
-      return;
-    }
-
-    final analytics = {
-      'totalLogs': logs.length,
-      'successRate': _calculateSuccessRate(logs),
-      'commonBehaviors': _analyzeFrequencies(logs, (log) => log.behavior),
-      'commonTriggers': _analyzeFrequencies(
-        logs.where((log) => log.trigger != null).toList(),
-        (log) => log.trigger!,
-      ),
-      'trend': _calculateTrend(logs),
-      'severityDistribution': _analyzeSeverityDistribution(logs),
-      'timeOfDayDistribution': _analyzeTimeDistribution(logs),
-      'averageDuration': _calculateAverageDuration(logs),
-      'behaviorPatterns': _identifyPatterns(logs),
-      'interventionEffectiveness': _calculateInterventionEffectiveness(logs),
-      'contextualAnalysis': _analyzeContexts(logs),
-      'weekdayDistribution': _analyzeWeekdayDistribution(logs),
-      'monthlyTrends': _analyzeMonthlyTrends(logs),
-      'correlations': _analyzeCorrelations(logs),
-    };
-
-    _behaviorAnalytics[petId] = analytics;
-  }
-
-  double _calculateSuccessRate(List<BehaviorLog> logs) {
-    if (logs.isEmpty) return 0.0;
-    final successfulLogs = logs.where((log) => log.wasSuccessful).length;
-    return (successfulLogs / logs.length) * 100;
-  }
-
-  Map<String, int> _analyzeFrequencies(
-    List<BehaviorLog> logs,
-    String Function(BehaviorLog) selector,
-  ) {
-    final frequencies = <String, int>{};
-    for (var log in logs) {
-      final key = selector(log);
-      frequencies[key] = (frequencies[key] ?? 0) + 1;
-    }
-    return Map.fromEntries(
-      frequencies.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value))
-    );
-  }
-
-  Map<String, int> _analyzeSeverityDistribution(List<BehaviorLog> logs) {
-    return _analyzeFrequencies(
-      logs.where((log) => log.severity != null).toList(),
-      (log) => log.severity!,
-    );
-  }
-
-  Map<String, int> _analyzeTimeDistribution(List<BehaviorLog> logs) {
-    final distribution = <String, int>{};
-    for (var log in logs) {
-      final hour = log.date.hour;
-      final timeSlot = _getTimeSlot(hour);
-      distribution[timeSlot] = (distribution[timeSlot] ?? 0) + 1;
-    }
-    return distribution;
-  }
-
-  String _getTimeSlot(int hour) {
-    if (hour >= 5 && hour < 12) return 'morning';
-    if (hour >= 12 && hour < 17) return 'afternoon';
-    if (hour >= 17 && hour < 22) return 'evening';
-    return 'night';
-  }
-
-  Duration _calculateAverageDuration(List<BehaviorLog> logs) {
-    final logsWithDuration = logs.where((log) => log.duration != null).toList();
-    if (logsWithDuration.isEmpty) return Duration.zero;
-
-    final totalMinutes = logsWithDuration.fold<int>(
-      0,
-      (sum, log) => sum + log.duration!.inMinutes,
-    );
-    return Duration(minutes: totalMinutes ~/ logsWithDuration.length);
-  }
-
-  List<Map<String, dynamic>> _identifyPatterns(List<BehaviorLog> logs) {
-    final patterns = <Map<String, dynamic>>[];
-    
-    // Time-based patterns
-    final timePatterns = _findTimePatterns(logs);
-    if (timePatterns.isNotEmpty) {
-      patterns.add({
-        'type': 'time',
-        'patterns': timePatterns,
-      });
-    }
-
-    // Trigger-based patterns
-    final triggerPatterns = _findTriggerPatterns(logs);
-    if (triggerPatterns.isNotEmpty) {
-      patterns.add({
-        'type': 'trigger',
-        'patterns': triggerPatterns,
-      });
-    }
-
-    return patterns;
-  }
-
-  List<Map<String, dynamic>> _findTimePatterns(List<BehaviorLog> logs) {
-    final timeSlotCounts = _analyzeTimeDistribution(logs);
-    final totalLogs = logs.length;
-    
-    return timeSlotCounts.entries
-        .where((entry) => entry.value / totalLogs > 0.3) // 30% threshold
-        .map((entry) => {
-          'timeSlot': entry.key,
-          'frequency': entry.value,
-          'percentage': (entry.value / totalLogs * 100).toStringAsFixed(1),
-        })
-        .toList();
-  }
-
-  List<Map<String, dynamic>> _findTriggerPatterns(List<BehaviorLog> logs) {
-    final triggerCounts = _analyzeFrequencies(
-      logs.where((log) => log.trigger != null).toList(),
-      (log) => log.trigger!,
-    );
-    
-    return triggerCounts.entries
-        .take(3)
-        .map((entry) => {
-          'trigger': entry.key,
-          'count': entry.value,
-          'successRate': _calculateTriggerSuccessRate(logs, entry.key),
-        })
-        .toList();
-  }
-
-  double _calculateTriggerSuccessRate(List<BehaviorLog> logs, String trigger) {
-    final triggerLogs = logs.where((log) => log.trigger == trigger).toList();
-    if (triggerLogs.isEmpty) return 0.0;
-    
-    final successfulLogs = triggerLogs.where((log) => log.wasSuccessful).length;
-    return (successfulLogs / triggerLogs.length) * 100;
-  }
-
-  Map<String, double> _analyzeCorrelations(List<BehaviorLog> logs) {
-    final correlations = <String, double>{};
-
-    // Time of day correlation
-    correlations['timeOfDay'] = _calculateTimeCorrelation(logs);
-
-    // Weather correlation (if available in metadata)
-    correlations['weather'] = _calculateWeatherCorrelation(logs);
-
-    // Activity level correlation
-    correlations['activityLevel'] = _calculateActivityCorrelation(logs);
-
-    return correlations;
-  }
-
-  double _calculateTimeCorrelation(List<BehaviorLog> logs) {
-    if (logs.length < 2) return 0.0;
-    
-    final timeSlotCounts = _analyzeTimeDistribution(logs);
-    final maxCount = timeSlotCounts.values.reduce(max);
-    final totalLogs = logs.length;
-    
-    return (maxCount / totalLogs) * 100;
-  }
-
-  double _calculateWeatherCorrelation(List<BehaviorLog> logs) {
-    // Implementation depends on weather data availability in metadata
-    return 0.0;
-  }
-
-  double _calculateActivityCorrelation(List<BehaviorLog> logs) {
-    // Implementation depends on activity data availability
-    return 0.0;
-  }
-
-  // Generate comprehensive report
-  Map<String, dynamic> generateBehaviorReport(String petId) {
-    final logs = _behaviorLogs[petId] ?? [];
-    final analytics = _behaviorAnalytics[petId] ?? _getEmptyTrends();
-
-    return {
-      'summary': {
-        'totalLogs': logs.length,
-        'dateRange': {
-          'start': logs.isNotEmpty ? logs.last.date : null,
-          'end': logs.isNotEmpty ? logs.first.date : null,
-        },
-        'successRate': analytics['successRate'],
-        'trend': analytics['trend'],
-      },
-      'patterns': analytics['behaviorPatterns'],
-      'distributions': {
-        'severity': analytics['severityDistribution'],
-        'timeOfDay': analytics['timeOfDayDistribution'],
-        'weekday': analytics['weekdayDistribution'],
-      },
-      'effectiveness': analytics['interventionEffectiveness'],
-      'correlations': analytics['correlations'],
-      'recommendations': generateRecommendations(petId),
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-  }
-
-  List<String> generateRecommendations(String petId) {
-    final analytics = _behaviorAnalytics[petId];
-    if (analytics == null) return ['Insufficient data for recommendations'];
-
-    final recommendations = <String>[];
-    final successRate = analytics['successRate'] as double;
-    final patterns = analytics['behaviorPatterns'] as List;
-
-    if (successRate < 50) {
-      recommendations.add('Consider consulting a professional behaviorist');
-    }
-
-    if (patterns.isNotEmpty) {
-      recommendations.add('Review identified behavior patterns and adjust routine accordingly');
-    }
-
-    // Add more specific recommendations based on analytics
-
-    return recommendations;
-  }
-
-  String _handleError(dynamic error, StackTrace stackTrace) {
-    debugPrint('BehaviorTracking Error: $error');
-    debugPrint('StackTrace: $stackTrace');
-    return 'Failed to process behavior data: ${error.toString()}';
-  }
-
-  void clear() {
-    _behaviorLogs = {};
-    _behaviorAnalytics = {};
-    _lastUpdated = {};
-    _error = null;
-    _isLoading = false;
+    logs.removeWhere((log) => log.id == logId);
+    _behaviorLogs[petId] = logs;
     notifyListeners();
   }
+
+  Future<Map<String, dynamic>> getBehaviorAnalytics(String petId) async {
+    if (_needsRefresh(petId)) {
+      await _updateBehaviorAnalytics(petId);
+    }
+    return _behaviorAnalytics[petId] ?? {};
+  }
+
+  Future<void> _updateBehaviorAnalytics(String petId) async {
+    try {
+      final logs = _behaviorLogs[petId] ?? [];
+      
+      _behaviorAnalytics[petId] = {
+        'overview': _generateOverview(logs),
+        'trends': await _analyzeTrends(logs),
+        'patterns': _identifyPatterns(logs),
+        'triggers': _analyzeTriggers(logs),
+        'resolutions': _analyzeResolutions(logs),
+        'recommendations': await _generateRecommendations(logs),
+      };
+
+    } catch (e, stackTrace) {
+      _logger.error('Failed to update behavior analytics', e, stackTrace);
+    }
+  }
+
+  Map<String, dynamic> _generateOverview(List<BehaviorLog> logs) {
+    return {
+      'totalLogs': logs.length,
+      'unresolvedCount': logs.where((log) => !log.isResolved).length,
+      'severityDistribution': _calculateSeverityDistribution(logs),
+      'recentBehaviors': _getRecentBehaviors(logs),
+      'mostCommonTypes': _getMostCommonTypes(logs),
+    };
+  }
+
+  Future<Map<String, dynamic>> _analyzeTrends(List<BehaviorLog> logs) async {
+    // Implement trend analysis logic
+    return {};
+  }
+
+  Map<String, dynamic> _identifyPatterns(List<BehaviorLog> logs) {
+    // Implement pattern identification logic
+    return {};
+  }
+
+  Map<String, dynamic> _analyzeTriggers(List<BehaviorLog> logs) {
+    // Implement trigger analysis logic
+    return {};
+  }
+
+  Map<String, dynamic> _analyzeResolutions(List<BehaviorLog> logs) {
+    // Implement resolution analysis logic
+    return {};
+  }
+
+  Future<List<Map<String, dynamic>>> _generateRecommendations(
+    List<BehaviorLog> logs,
+  ) async {
+    // Implement recommendation generation logic
+    return [];
+  }
+
+  bool _needsRefresh(String petId) {
+    final lastUpdate = _lastUpdated[petId];
+    if (lastUpdate == null) return true;
+    return DateTime.now().difference(lastUpdate) > _cacheExpiration;
+  }
+
+  String _handleError(String operation, dynamic error, StackTrace stackTrace) {
+    return 'Failed to $operation: ${error.toString()}';
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+}
+
+class BehaviorLog {
+  final String id;
+  final String petId;
+  final String type;
+  final String description;
+  final String severity;
+  final String? trigger;
+  final String? resolution;
+  final DateTime timestamp;
+  final bool isResolved;
+  final Map<String, dynamic> metadata;
+  final List<String> tags;
+
+  BehaviorLog({
+    required this.id,
+    required this.petId,
+    required this.type,
+    required this.description,
+    required this.severity,
+    this.trigger,
+    this.resolution,
+    required this.timestamp,
+    this.isResolved = false,
+    this.metadata = const {},
+    this.tags = const [],
+  });
+
+  BehaviorLog copyWith({
+    String? type,
+    String? description,
+    String? severity,
+    String? trigger,
+    String? resolution,
+    bool? isResolved,
+    Map<String, dynamic>? metadata,
+    List<String>? tags,
+  }) {
+    return BehaviorLog(
+      id: id,
+      petId: petId,
+      type: type ?? this.type,
+      description: description ?? this.description,
+      severity: severity ?? this.severity,
+      trigger: trigger ?? this.trigger,
+      resolution: resolution ?? this.resolution,
+      timestamp: timestamp,
+      isResolved: isResolved ?? this.isResolved,
+      metadata: metadata ?? this.metadata,
+      tags: tags ?? this.tags,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'petId': petId,
+    'type': type,
+    'description': description,
+    'severity': severity,
+    'trigger': trigger,
+    'resolution': resolution,
+    'timestamp': timestamp.toIso8601String(),
+    'isResolved': isResolved,
+    'metadata': metadata,
+    'tags': tags,
+  };
+
+  factory BehaviorLog.fromJson(Map<String, dynamic> json) => BehaviorLog(
+    id: json['id'],
+    petId: json['petId'],
+    type: json['type'],
+    description: json['description'],
+    severity: json['severity'],
+    trigger: json['trigger'],
+    resolution: json['resolution'],
+    timestamp: DateTime.parse(json['timestamp']),
+    isResolved: json['isResolved'] ?? false,
+    metadata: json['metadata'] ?? {},
+    tags: List<String>.from(json['tags'] ?? []),
+  );
 }

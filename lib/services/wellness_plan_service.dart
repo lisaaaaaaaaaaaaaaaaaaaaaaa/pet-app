@@ -1,318 +1,434 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:uuid/uuid.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'core/base_service.dart';
+import '../models/wellness_plan.dart';
+import '../models/wellness_task.dart';
+import '../models/wellness_progress.dart';
+import '../models/wellness_recommendation.dart';
+import '../utils/exceptions.dart';
 
-class WellnessPlanService {
+class WellnessPlanService extends BaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final uuid = const Uuid();
-
-  // Singleton pattern
+  
   static final WellnessPlanService _instance = WellnessPlanService._internal();
   factory WellnessPlanService() => _instance;
   WellnessPlanService._internal();
 
-  // Create a new wellness plan
-  Future<String> createWellnessPlan({
-    required String petId,
-    required String userId,
-    required String planName,
-    required DateTime startDate,
-    required DateTime endDate,
-    required List<Map<String, dynamic>> goals,
-    required List<Map<String, dynamic>> activities,
-    String? veterinarianId,
-    Map<String, dynamic>? dietaryPlan,
-    Map<String, dynamic>? exercisePlan,
-    List<Map<String, dynamic>>? medications,
-    List<Map<String, dynamic>>? supplements,
-    Map<String, dynamic>? progressMetrics,
-    String? notes,
-  }) async {
+  // Collection References
+  CollectionReference get _usersRef => _firestore.collection('users');
+  CollectionReference _petWellnessRef(String userId, String petId) =>
+      _usersRef.doc(userId).collection('pets').doc(petId).collection('wellness');
+
+  // Wellness Plan Management
+  Future<void> createWellnessPlan(
+    String userId,
+    String petId,
+    WellnessPlan plan,
+  ) async {
     try {
-      final String planId = uuid.v4();
-      final documentRef = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('wellnessPlans')
-          .doc(planId);
-
-      final planData = {
-        'id': planId,
-        'petId': petId,
-        'userId': userId,
-        'planName': planName,
-        'startDate': Timestamp.fromDate(startDate),
-        'endDate': Timestamp.fromDate(endDate),
-        'goals': goals,
-        'activities': activities,
-        'veterinarianId': veterinarianId,
-        'dietaryPlan': dietaryPlan ?? {},
-        'exercisePlan': exercisePlan ?? {},
-        'medications': medications ?? [],
-        'supplements': supplements ?? [],
-        'progressMetrics': progressMetrics ?? {},
-        'notes': notes,
-        'status': 'active',
-        'completedActivities': [],
-        'achievedGoals': [],
-        'lastUpdated': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-      };
-
-      await documentRef.set(planData);
-      return planId;
-    } catch (e) {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petWellnessRef(userId, petId)
+            .doc('plan')
+            .set(plan.toJson());
+            
+        // Create initial progress tracking
+        await _initializeProgress(userId, petId, plan);
+        
+        // Schedule reminders for tasks
+        await _scheduleTaskReminders(userId, petId, plan);
+        
+        logger.i('Created wellness plan for pet: $petId');
+        analytics.logEvent('wellness_plan_created');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error creating wellness plan', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
       throw WellnessPlanException('Error creating wellness plan: $e');
     }
   }
 
-  // Update an existing wellness plan
-  Future<void> updateWellnessPlan({
-    required String petId,
-    required String planId,
-    String? planName,
-    DateTime? startDate,
-    DateTime? endDate,
-    List<Map<String, dynamic>>? goals,
-    List<Map<String, dynamic>>? activities,
-    String? veterinarianId,
-    Map<String, dynamic>? dietaryPlan,
-    Map<String, dynamic>? exercisePlan,
-    List<Map<String, dynamic>>? medications,
-    List<Map<String, dynamic>>? supplements,
-    Map<String, dynamic>? progressMetrics,
-    String? notes,
-    String? status,
-  }) async {
+  Future<void> updateWellnessPlan(
+    String userId,
+    String petId,
+    WellnessPlan plan,
+  ) async {
     try {
-      final documentRef = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('wellnessPlans')
-          .doc(planId);
-
-      final Map<String, dynamic> updateData = {};
-
-      if (planName != null) updateData['planName'] = planName;
-      if (startDate != null) updateData['startDate'] = Timestamp.fromDate(startDate);
-      if (endDate != null) updateData['endDate'] = Timestamp.fromDate(endDate);
-      if (goals != null) updateData['goals'] = goals;
-      if (activities != null) updateData['activities'] = activities;
-      if (veterinarianId != null) updateData['veterinarianId'] = veterinarianId;
-      if (dietaryPlan != null) updateData['dietaryPlan'] = dietaryPlan;
-      if (exercisePlan != null) updateData['exercisePlan'] = exercisePlan;
-      if (medications != null) updateData['medications'] = medications;
-      if (supplements != null) updateData['supplements'] = supplements;
-      if (progressMetrics != null) updateData['progressMetrics'] = progressMetrics;
-      if (notes != null) updateData['notes'] = notes;
-      if (status != null) updateData['status'] = status;
-
-      updateData['lastUpdated'] = FieldValue.serverTimestamp();
-
-      await documentRef.update(updateData);
-    } catch (e) {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petWellnessRef(userId, petId)
+            .doc('plan')
+            .update(plan.toJson());
+            
+        // Update progress tracking
+        await _updateProgress(userId, petId, plan);
+        
+        // Update task reminders
+        await _updateTaskReminders(userId, petId, plan);
+        
+        logger.i('Updated wellness plan for pet: $petId');
+        analytics.logEvent('wellness_plan_updated');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error updating wellness plan', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
       throw WellnessPlanException('Error updating wellness plan: $e');
     }
   }
 
-  // Get a specific wellness plan
-  Future<Map<String, dynamic>> getWellnessPlan({
-    required String petId,
-    required String planId,
-  }) async {
+  // Task Management
+  Future<void> completeTask(
+    String userId,
+    String petId,
+    String taskId,
+    Map<String, dynamic> completionData,
+  ) async {
     try {
-      final documentSnapshot = await _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('wellnessPlans')
-          .doc(planId)
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        // Update task completion status
+        await _petWellnessRef(userId, petId)
+            .doc('progress')
+            .collection('tasks')
+            .doc(taskId)
+            .update({
+          'completed': true,
+          'completedAt': FieldValue.serverTimestamp(),
+          'completionData': completionData,
+        });
+
+        // Update overall progress
+        await _updateOverallProgress(userId, petId);
+        
+        logger.i('Completed wellness task: $taskId');
+        analytics.logEvent('wellness_task_completed');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error completing task', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw WellnessPlanException('Error completing task: $e');
+    }
+  }
+
+  Future<void> skipTask(
+    String userId,
+    String petId,
+    String taskId,
+    String reason,
+  ) async {
+    try {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petWellnessRef(userId, petId)
+            .doc('progress')
+            .collection('tasks')
+            .doc(taskId)
+            .update({
+          'skipped': true,
+          'skippedAt': FieldValue.serverTimestamp(),
+          'skipReason': reason,
+        });
+        
+        logger.i('Skipped wellness task: $taskId');
+        analytics.logEvent('wellness_task_skipped');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error skipping task', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw WellnessPlanException('Error skipping task: $e');
+    }
+  }
+
+  // Progress Tracking
+  Stream<WellnessProgress> streamProgress(String userId, String petId) {
+    try {
+      return _petWellnessRef(userId, petId)
+          .doc('progress')
+          .snapshots()
+          .map((doc) => WellnessProgress.fromJson(doc.data()!));
+    } catch (e, stackTrace) {
+      logger.e('Error streaming progress', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw WellnessPlanException('Error streaming progress: $e');
+    }
+  }
+
+  Future<List<WellnessTask>> getDueTasks(String userId, String petId) async {
+    try {
+      await checkConnectivity();
+      
+      return await withCache(
+        key: 'due_tasks_${userId}_$petId',
+        duration: const Duration(minutes: 15),
+        fetchData: () async {
+          final now = DateTime.now();
+          final snapshot = await _petWellnessRef(userId, petId)
+              .doc('progress')
+              .collection('tasks')
+              .where('dueDate', isLessThanOrEqualTo: now)
+              .where('completed', isEqualTo: false)
+              .where('skipped', isEqualTo: false)
+              .orderBy('dueDate')
+              .get();
+              
+          return snapshot.docs
+              .map((doc) => WellnessTask.fromJson(doc.data()))
+              .toList();
+        },
+      );
+    } catch (e, stackTrace) {
+      logger.e('Error getting due tasks', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw WellnessPlanException('Error getting due tasks: $e');
+    }
+  }
+
+  // Recommendations
+  Future<List<WellnessRecommendation>> getRecommendations(
+    String userId,
+    String petId,
+  ) async {
+    try {
+      await checkConnectivity();
+      
+      final plan = await _getCurrentPlan(userId, petId);
+      final progress = await _getCurrentProgress(userId, petId);
+      
+      return _generateRecommendations(plan, progress);
+    } catch (e, stackTrace) {
+      logger.e('Error getting recommendations', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw WellnessPlanException('Error getting recommendations: $e');
+    }
+  }
+
+  // Helper Methods
+  Future<void> _initializeProgress(
+    String userId,
+    String petId,
+    WellnessPlan plan,
+  ) async {
+    try {
+      final progress = WellnessProgress(
+        planId: plan.id,
+        startDate: DateTime.now(),
+        overallProgress: 0,
+        categoryProgress: {},
+        lastUpdated: DateTime.now(),
+      );
+
+      await _petWellnessRef(userId, petId)
+          .doc('progress')
+          .set(progress.toJson());
+
+      // Initialize task tracking
+      for (var task in plan.tasks) {
+        await _petWellnessRef(userId, petId)
+            .doc('progress')
+            .collection('tasks')
+            .doc(task.id)
+            .set({
+          ...task.toJson(),
+          'completed': false,
+          'skipped': false,
+          'dueDate': _calculateNextDueDate(task),
+        });
+      }
+    } catch (e) {
+      logger.e('Error initializing progress', e);
+      throw WellnessPlanException('Error initializing progress: $e');
+    }
+  }
+
+  Future<void> _updateProgress(
+    String userId,
+    String petId,
+    WellnessPlan plan,
+  ) async {
+    try {
+      // Update existing tasks
+      final existingTasks = await _petWellnessRef(userId, petId)
+          .doc('progress')
+          .collection('tasks')
           .get();
 
-      if (!documentSnapshot.exists) {
-        throw WellnessPlanException('Wellness plan not found');
+      final batch = _firestore.batch();
+
+      // Remove tasks that are no longer in the plan
+      for (var doc in existingTasks.docs) {
+        if (!plan.tasks.any((task) => task.id == doc.id)) {
+          batch.delete(doc.reference);
+        }
       }
 
-      return documentSnapshot.data() as Map<String, dynamic>;
-    } catch (e) {
-      throw WellnessPlanException('Error fetching wellness plan: $e');
-    }
-  }
+      // Add or update tasks
+      for (var task in plan.tasks) {
+        final taskRef = _petWellnessRef(userId, petId)
+            .doc('progress')
+            .collection('tasks')
+            .doc(task.id);
 
-  // Get all wellness plans for a pet
-  Future<List<Map<String, dynamic>>> getPetWellnessPlans({
-    required String petId,
-    String? status,
-  }) async {
-    try {
-      Query query = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('wellnessPlans')
-          .orderBy('startDate', descending: true);
+        final existingTask = existingTasks.docs
+            .firstWhere((doc) => doc.id == task.id, orElse: () => null as DocumentSnapshot<Object?>);
 
-      if (status != null) {
-        query = query.where('status', isEqualTo: status);
+        if (existingTask == null) {
+          // New task
+          batch.set(taskRef, {
+            ...task.toJson(),
+            'completed': false,
+            'skipped': false,
+            'dueDate': _calculateNextDueDate(task),
+          });
+        } else {
+          // Update existing task
+          batch.update(taskRef, task.toJson());
+        }
       }
 
-      final querySnapshot = await query.get();
-
-      return querySnapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
-          .toList();
+      await batch.commit();
     } catch (e) {
-      throw WellnessPlanException('Error fetching wellness plans: $e');
+      logger.e('Error updating progress', e);
+      throw WellnessPlanException('Error updating progress: $e');
     }
   }
 
-  // Record activity completion
-  Future<void> recordActivityCompletion({
-    required String petId,
-    required String planId,
-    required String activityId,
-    required DateTime completionDate,
-    Map<String, dynamic>? metrics,
-    String? notes,
-  }) async {
+  Future<void> _updateOverallProgress(String userId, String petId) async {
     try {
-      final documentRef = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('wellnessPlans')
-          .doc(planId);
-
-      await _firestore.runTransaction((transaction) async {
-        final planSnapshot = await transaction.get(documentRef);
-        
-        if (!planSnapshot.exists) {
-          throw WellnessPlanException('Wellness plan not found');
-        }
-
-        final List<dynamic> completedActivities = 
-            List.from(planSnapshot.data()?['completedActivities'] ?? []);
-
-        completedActivities.add({
-          'activityId': activityId,
-          'completionDate': Timestamp.fromDate(completionDate),
-          'metrics': metrics ?? {},
-          'notes': notes,
-        });
-
-        transaction.update(documentRef, {
-          'completedActivities': completedActivities,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        });
-      });
-    } catch (e) {
-      throw WellnessPlanException('Error recording activity completion: $e');
-    }
-  }
-
-  // Update goal progress
-  Future<void> updateGoalProgress({
-    required String petId,
-    required String planId,
-    required String goalId,
-    required double progress,
-    bool? achieved,
-    String? notes,
-  }) async {
-    try {
-      final documentRef = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('wellnessPlans')
-          .doc(planId);
-
-      await _firestore.runTransaction((transaction) async {
-        final planSnapshot = await transaction.get(documentRef);
-        
-        if (!planSnapshot.exists) {
-          throw WellnessPlanException('Wellness plan not found');
-        }
-
-        final List<dynamic> goals = List.from(planSnapshot.data()?['goals'] ?? []);
-        final int goalIndex = goals.indexWhere((g) => g['id'] == goalId);
-
-        if (goalIndex == -1) {
-          throw WellnessPlanException('Goal not found');
-        }
-
-        goals[goalIndex]['progress'] = progress;
-        if (achieved != null) goals[goalIndex]['achieved'] = achieved;
-        if (notes != null) goals[goalIndex]['notes'] = notes;
-
-        transaction.update(documentRef, {
-          'goals': goals,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        });
-      });
-    } catch (e) {
-      throw WellnessPlanException('Error updating goal progress: $e');
-    }
-  }
-
-  // Get wellness plan progress
-  Future<Map<String, dynamic>> getWellnessPlanProgress({
-    required String petId,
-    required String planId,
-  }) async {
-    try {
-      final planSnapshot = await _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('wellnessPlans')
-          .doc(planId)
+      final tasks = await _petWellnessRef(userId, petId)
+          .doc('progress')
+          .collection('tasks')
           .get();
 
-      if (!planSnapshot.exists) {
-        throw WellnessPlanException('Wellness plan not found');
-      }
+      final totalTasks = tasks.docs.length;
+      final completedTasks = tasks.docs
+          .where((doc) => doc.data()['completed'] == true)
+          .length;
 
-      final planData = planSnapshot.data()!;
-      final List<dynamic> goals = planData['goals'] ?? [];
-      final List<dynamic> activities = planData['activities'] ?? [];
-      final List<dynamic> completedActivities = planData['completedActivities'] ?? [];
+      final progress = (completedTasks / totalTasks) * 100;
 
-      final totalGoals = goals.length;
-      final achievedGoals = goals.where((g) => g['achieved'] == true).length;
-      final totalActivities = activities.length;
-      final completedActivitiesCount = completedActivities.length;
-
-      return {
-        'totalGoals': totalGoals,
-        'achievedGoals': achievedGoals,
-        'goalProgress': totalGoals > 0 ? (achievedGoals / totalGoals) : 0.0,
-        'totalActivities': totalActivities,
-        'completedActivities': completedActivitiesCount,
-        'activityProgress': totalActivities > 0 
-            ? (completedActivitiesCount / totalActivities) 
-            : 0.0,
-        'lastUpdated': planData['lastUpdated'],
-      };
-    } catch (e) {
-      throw WellnessPlanException('Error getting wellness plan progress: $e');
-    }
-  }
-
-  // Archive wellness plan
-  Future<void> archiveWellnessPlan({
-    required String petId,
-    required String planId,
-    String? archiveReason,
-  }) async {
-    try {
-      await _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('wellnessPlans')
-          .doc(planId)
+      await _petWellnessRef(userId, petId)
+          .doc('progress')
           .update({
-        'status': 'archived',
-        'archiveReason': archiveReason,
-        'archivedAt': FieldValue.serverTimestamp(),
+        'overallProgress': progress,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      throw WellnessPlanException('Error archiving wellness plan: $e');
+      logger.e('Error updating overall progress', e);
+    }
+  }
+
+  DateTime _calculateNextDueDate(WellnessTask task) {
+    final now = DateTime.now();
+    
+    switch (task.frequency) {
+      case 'daily':
+        return DateTime(now.year, now.month, now.day)
+            .add(const Duration(days: 1));
+      case 'weekly':
+        return DateTime(now.year, now.month, now.day)
+            .add(const Duration(days: 7));
+      case 'monthly':
+        return DateTime(now.year, now.month + 1, now.day);
+      case 'yearly':
+        return DateTime(now.year + 1, now.month, now.day);
+      default:
+        return now;
+    }
+  }
+
+  Future<WellnessPlan> _getCurrentPlan(String userId, String petId) async {
+    final doc = await _petWellnessRef(userId, petId).doc('plan').get();
+    return WellnessPlan.fromJson(doc.data()!);
+  }
+
+  Future<WellnessProgress> _getCurrentProgress(String userId, String petId) async {
+    final doc = await _petWellnessRef(userId, petId).doc('progress').get();
+    return WellnessProgress.fromJson(doc.data()!);
+  }
+
+  List<WellnessRecommendation> _generateRecommendations(
+    WellnessPlan plan,
+    WellnessProgress progress,
+  ) {
+    final recommendations = <WellnessRecommendation>[];
+
+    // Add recommendations based on progress
+    if (progress.overallProgress < 50) {
+      recommendations.add(
+        WellnessRecommendation(
+          id: 'improve_completion',
+          title: 'Improve Task Completion',
+          description: 'Try to complete more wellness tasks to improve your pet\'s health.',
+          priority: 'high',
+        ),
+      );
+    }
+
+    // Add category-specific recommendations
+    for (var entry in progress.categoryProgress.entries) {
+      if (entry.value < 70) {
+        recommendations.add(
+          WellnessRecommendation(
+            id: 'improve_${entry.key}',
+            title: 'Focus on ${entry.key}',
+            description: 'This category needs more attention.',
+            priority: 'medium',
+          ),
+        );
+      }
+    }
+
+    return recommendations;
+  }
+
+  Future<void> _scheduleTaskReminders(
+    String userId,
+    String petId,
+    WellnessPlan plan,
+  ) async {
+    try {
+      for (var task in plan.tasks) {
+        if (task.reminderEnabled) {
+          final dueDate = _calculateNextDueDate(task);
+          final reminderTime = dueDate.subtract(const Duration(hours: 1));
+
+          await notificationService.scheduleNotification(
+            id: task.hashCode,
+            title: 'Wellness Task Due Soon',
+            body: 'Don\'t forget: ${task.name}',
+            scheduledDate: reminderTime,
+            payload: json.encode({
+              'type': 'wellness_task',
+              'taskId': task.id,
+              'petId': petId,
+            }),
+          );
+        }
+      }
+    } catch (e) {
+      logger.e('Error scheduling task reminders', e);
+    }
+  }
+
+  Future<void> _updateTaskReminders(
+    String userId,
+    String petId,
+    WellnessPlan plan,
+  ) async {
+    try {
+      // Cancel existing reminders
+      for (var task in plan.tasks) {
+        await notificationService.cancelNotification(task.hashCode);
+      }
+
+      // Schedule new reminders
+      await _scheduleTaskReminders(userId, petId, plan);
+    } catch (e) {
+      logger.e('Error updating task reminders', e);
     }
   }
 }

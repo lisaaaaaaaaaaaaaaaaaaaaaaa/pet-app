@@ -1,344 +1,352 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:uuid/uuid.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'core/base_service.dart';
+import '../models/medication.dart';
+import '../models/medication_schedule.dart';
+import '../models/medication_log.dart';
+import '../utils/exceptions.dart';
+import '../utils/notification_helper.dart';
 
-class MedicationService {
+class MedicationService extends BaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final uuid = const Uuid();
-
-  // Singleton pattern
+  final NotificationHelper _notificationHelper = NotificationHelper();
+  
   static final MedicationService _instance = MedicationService._internal();
   factory MedicationService() => _instance;
   MedicationService._internal();
 
-  // Create a new medication
-  Future<String> createMedication({
-    required String petId,
-    required String userId,
-    required String name,
-    required String dosage,
-    required String frequency,
-    required DateTime startDate,
-    DateTime? endDate,
-    String? prescribedBy,
-    String? instructions,
-    String? purpose,
-    List<String>? sideEffects,
-    bool isActive = true,
-    List<String>? attachments,
-    Map<String, dynamic>? reminders,
-  }) async {
+  // Collection References
+  CollectionReference get _usersRef => _firestore.collection('users');
+  CollectionReference _petMedicationRef(String userId, String petId) =>
+      _usersRef.doc(userId).collection('pets').doc(petId).collection('medications');
+
+  // Medication Management
+  Future<void> addMedication(
+    String userId,
+    String petId,
+    Medication medication,
+    MedicationSchedule schedule,
+  ) async {
     try {
-      final String medicationId = uuid.v4();
-      final documentRef = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medications')
-          .doc(medicationId);
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        // Add medication details
+        await _petMedicationRef(userId, petId)
+            .doc(medication.id)
+            .set(medication.toJson());
 
-      final medicationData = {
-        'id': medicationId,
-        'petId': petId,
-        'userId': userId,
-        'name': name,
-        'dosage': dosage,
-        'frequency': frequency,
-        'startDate': Timestamp.fromDate(startDate),
-        'endDate': endDate != null ? Timestamp.fromDate(endDate) : null,
-        'prescribedBy': prescribedBy,
-        'instructions': instructions,
-        'purpose': purpose,
-        'sideEffects': sideEffects ?? [],
-        'isActive': isActive,
-        'attachments': attachments ?? [],
-        'reminders': reminders ?? {},
-        'lastAdministered': null,
-        'nextDue': null,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
+        // Add schedule
+        await _petMedicationRef(userId, petId)
+            .doc(medication.id)
+            .collection('schedules')
+            .doc('current')
+            .set(schedule.toJson());
 
-      await documentRef.set(medicationData);
-      return medicationId;
-    } catch (e) {
-      throw MedicationException('Error creating medication: $e');
+        // Schedule notifications
+        await _scheduleNotifications(userId, petId, medication, schedule);
+        
+        logger.i('Added medication: ${medication.id}');
+        analytics.logEvent('medication_added');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error adding medication', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicationException('Error adding medication: $e');
     }
   }
 
-  // Update an existing medication
-  Future<void> updateMedication({
-    required String medicationId,
-    required String petId,
-    String? name,
-    String? dosage,
-    String? frequency,
+  Future<List<Medication>> getActiveMedications(String userId, String petId) async {
+    try {
+      await checkConnectivity();
+      
+      return await withCache(
+        key: 'active_medications_${userId}_$petId',
+        duration: const Duration(minutes: 30),
+        fetchData: () async {
+          final snapshot = await _petMedicationRef(userId, petId)
+              .where('status', isEqualTo: 'active')
+              .get();
+              
+          return snapshot.docs
+              .map((doc) => Medication.fromJson(doc.data()))
+              .toList();
+        },
+      );
+    } catch (e, stackTrace) {
+      logger.e('Error getting active medications', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicationException('Error getting active medications: $e');
+    }
+  }
+
+  Stream<List<Medication>> streamMedications(String userId, String petId) {
+    try {
+      return _petMedicationRef(userId, petId)
+          .snapshots()
+          .map((snapshot) => snapshot.docs
+              .map((doc) => Medication.fromJson(doc.data()))
+              .toList());
+    } catch (e, stackTrace) {
+      logger.e('Error streaming medications', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicationException('Error streaming medications: $e');
+    }
+  }
+
+  // Medication Schedule Management
+  Future<void> updateMedicationSchedule(
+    String userId,
+    String petId,
+    String medicationId,
+    MedicationSchedule newSchedule,
+  ) async {
+    try {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        // Update schedule
+        await _petMedicationRef(userId, petId)
+            .doc(medicationId)
+            .collection('schedules')
+            .doc('current')
+            .set(newSchedule.toJson());
+
+        // Get medication details
+        final medicationDoc = await _petMedicationRef(userId, petId)
+            .doc(medicationId)
+            .get();
+        final medication = Medication.fromJson(medicationDoc.data()!);
+
+        // Reschedule notifications
+        await _cancelExistingNotifications(medicationId);
+        await _scheduleNotifications(userId, petId, medication, newSchedule);
+        
+        logger.i('Updated medication schedule: $medicationId');
+        analytics.logEvent('medication_schedule_updated');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error updating medication schedule', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicationException('Error updating medication schedule: $e');
+    }
+  }
+
+  // Medication Logging
+  Future<void> logMedicationDose(
+    String userId,
+    String petId,
+    String medicationId,
+    MedicationLog log,
+  ) async {
+    try {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petMedicationRef(userId, petId)
+            .doc(medicationId)
+            .collection('logs')
+            .doc(log.id)
+            .set(log.toJson());
+            
+        await _updateAdherenceMetrics(userId, petId, medicationId);
+        logger.i('Logged medication dose: ${log.id}');
+        analytics.logEvent('medication_dose_logged');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error logging medication dose', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicationException('Error logging medication dose: $e');
+    }
+  }
+
+  Future<List<MedicationLog>> getMedicationLogs(
+    String userId,
+    String petId,
+    String medicationId, {
     DateTime? startDate,
     DateTime? endDate,
-    String? prescribedBy,
-    String? instructions,
-    String? purpose,
-    List<String>? sideEffects,
-    bool? isActive,
-    List<String>? attachments,
-    Map<String, dynamic>? reminders,
   }) async {
     try {
-      final documentRef = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medications')
-          .doc(medicationId);
+      await checkConnectivity();
+      
+      var query = _petMedicationRef(userId, petId)
+          .doc(medicationId)
+          .collection('logs')
+          .orderBy('timestamp', descending: true);
 
-      final Map<String, dynamic> updateData = {};
+      if (startDate != null) {
+        query = query.where('timestamp',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
+      }
 
-      if (name != null) updateData['name'] = name;
-      if (dosage != null) updateData['dosage'] = dosage;
-      if (frequency != null) updateData['frequency'] = frequency;
-      if (startDate != null) updateData['startDate'] = Timestamp.fromDate(startDate);
-      if (endDate != null) updateData['endDate'] = Timestamp.fromDate(endDate);
-      if (prescribedBy != null) updateData['prescribedBy'] = prescribedBy;
-      if (instructions != null) updateData['instructions'] = instructions;
-      if (purpose != null) updateData['purpose'] = purpose;
-      if (sideEffects != null) updateData['sideEffects'] = sideEffects;
-      if (isActive != null) updateData['isActive'] = isActive;
-      if (attachments != null) updateData['attachments'] = attachments;
-      if (reminders != null) updateData['reminders'] = reminders;
+      if (endDate != null) {
+        query = query.where('timestamp',
+            isLessThanOrEqualTo: Timestamp.fromDate(endDate));
+      }
 
-      updateData['updatedAt'] = FieldValue.serverTimestamp();
-
-      await documentRef.update(updateData);
-    } catch (e) {
-      throw MedicationException('Error updating medication: $e');
+      final snapshot = await query.get();
+      return snapshot.docs
+          .map((doc) => MedicationLog.fromJson(doc.data()))
+          .toList();
+    } catch (e, stackTrace) {
+      logger.e('Error getting medication logs', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicationException('Error getting medication logs: $e');
     }
   }
 
-  // Record medication administration
-  Future<void> recordMedicationAdministration({
-    required String medicationId,
-    required String petId,
-    required DateTime administeredAt,
-    String? notes,
-    String? administeredBy,
-  }) async {
+  // Medication Reminders
+  Future<void> _scheduleNotifications(
+    String userId,
+    String petId,
+    Medication medication,
+    MedicationSchedule schedule,
+  ) async {
     try {
-      final medicationRef = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medications')
-          .doc(medicationId);
+      final List<PendingNotificationRequest> notifications = [];
 
-      final historyRef = medicationRef.collection('administrationHistory').doc();
+      for (var time in schedule.times) {
+        final id = DateTime.now().millisecondsSinceEpoch + notifications.length;
+        
+        notifications.add(
+          PendingNotificationRequest(
+            id,
+            'Medication Reminder',
+            '${medication.name} for ${medication.petName}',
+            time,
+            payload: {
+              'type': 'medication',
+              'medicationId': medication.id,
+              'petId': petId,
+              'userId': userId,
+            },
+          ),
+        );
+      }
 
-      // Create administration record
-      final administrationData = {
-        'administeredAt': Timestamp.fromDate(administeredAt),
-        'notes': notes,
-        'administeredBy': administeredBy,
-        'createdAt': FieldValue.serverTimestamp(),
-      };
+      await _notificationHelper.scheduleNotifications(notifications);
+    } catch (e) {
+      logger.e('Error scheduling notifications', e);
+    }
+  }
 
-      // Update medication document
-      await _firestore.runTransaction((transaction) async {
-        final medicationDoc = await transaction.get(medicationRef);
-        if (!medicationDoc.exists) {
-          throw MedicationException('Medication not found');
-        }
+  Future<void> _cancelExistingNotifications(String medicationId) async {
+    try {
+      await _notificationHelper.cancelNotificationsByTag(medicationId);
+    } catch (e) {
+      logger.e('Error canceling notifications', e);
+    }
+  }
 
-        // Calculate next due date based on frequency
-        final medicationData = medicationDoc.data() as Map<String, dynamic>;
-        final frequency = medicationData['frequency'] as String;
-        final nextDue = calculateNextDueDate(administeredAt, frequency);
+  // Metrics and Analytics
+  Future<void> _updateAdherenceMetrics(
+    String userId,
+    String petId,
+    String medicationId,
+  ) async {
+    try {
+      final now = DateTime.now();
+      final startDate = now.subtract(const Duration(days: 30));
+      
+      final logs = await getMedicationLogs(
+        userId,
+        petId,
+        medicationId,
+        startDate: startDate,
+        endDate: now,
+      );
 
-        transaction.update(medicationRef, {
-          'lastAdministered': Timestamp.fromDate(administeredAt),
-          'nextDue': Timestamp.fromDate(nextDue),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+      final schedule = await _petMedicationRef(userId, petId)
+          .doc(medicationId)
+          .collection('schedules')
+          .doc('current')
+          .get();
 
-        transaction.set(historyRef, administrationData);
+      final medicationSchedule = MedicationSchedule.fromJson(schedule.data()!);
+      final adherenceRate = _calculateAdherenceRate(logs, medicationSchedule, startDate, now);
+
+      await _petMedicationRef(userId, petId)
+          .doc(medicationId)
+          .update({
+        'adherenceRate': adherenceRate,
+        'lastUpdated': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      throw MedicationException('Error recording medication administration: $e');
+      logger.e('Error updating adherence metrics', e);
     }
   }
 
-  // Get medication administration history
-  Future<List<Map<String, dynamic>>> getMedicationHistory({
-    required String medicationId,
-    required String petId,
+  double _calculateAdherenceRate(
+    List<MedicationLog> logs,
+    MedicationSchedule schedule,
+    DateTime startDate,
+    DateTime endDate,
+  ) {
+    final expectedDoses = schedule.calculateExpectedDoses(startDate, endDate);
+    final actualDoses = logs.length;
+    
+    return expectedDoses > 0 ? (actualDoses / expectedDoses) * 100 : 0;
+  }
+
+  // Reporting
+  Future<Map<String, dynamic>> getMedicationReport(
+    String userId,
+    String petId,
+    String medicationId, {
     DateTime? startDate,
     DateTime? endDate,
-    int? limit,
   }) async {
     try {
-      Query query = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medications')
+      await checkConnectivity();
+      
+      final logs = await getMedicationLogs(
+        userId,
+        petId,
+        medicationId,
+        startDate: startDate,
+        endDate: endDate,
+      );
+
+      final medicationDoc = await _petMedicationRef(userId, petId)
           .doc(medicationId)
-          .collection('administrationHistory')
-          .orderBy('administeredAt', descending: true);
-
-      if (startDate != null) {
-        query = query.where('administeredAt',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
-      }
-
-      if (endDate != null) {
-        query = query.where('administeredAt',
-            isLessThanOrEqualTo: Timestamp.fromDate(endDate));
-      }
-
-      if (limit != null) {
-        query = query.limit(limit);
-      }
-
-      final querySnapshot = await query.get();
-      return querySnapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
-          .toList();
-    } catch (e) {
-      throw MedicationException('Error fetching medication history: $e');
-    }
-  }
-
-  // Get all active medications for a pet
-  Future<List<Map<String, dynamic>>> getActiveMedications({
-    required String petId,
-  }) async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medications')
-          .where('isActive', isEqualTo: true)
-          .orderBy('nextDue')
           .get();
+      final medication = Medication.fromJson(medicationDoc.data()!);
 
-      return querySnapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
-          .toList();
-    } catch (e) {
-      throw MedicationException('Error fetching active medications: $e');
+      final schedule = await _petMedicationRef(userId, petId)
+          .doc(medicationId)
+          .collection('schedules')
+          .doc('current')
+          .get();
+      final medicationSchedule = MedicationSchedule.fromJson(schedule.data()!);
+
+      return {
+        'medication': medication.toJson(),
+        'schedule': medicationSchedule.toJson(),
+        'logs': logs.map((log) => log.toJson()).toList(),
+        'adherenceRate': medication.adherenceRate,
+        'missedDoses': _calculateMissedDoses(logs, medicationSchedule, startDate, endDate),
+        'lastTaken': logs.isNotEmpty ? logs.first.timestamp : null,
+      };
+    } catch (e, stackTrace) {
+      logger.e('Error generating medication report', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicationException('Error generating medication report: $e');
     }
   }
 
-  // Get all medications for a pet
-  Future<List<Map<String, dynamic>>> getAllMedications({
-    required String petId,
-    bool? isActive,
+  int _calculateMissedDoses(
+    List<MedicationLog> logs,
+    MedicationSchedule schedule,
     DateTime? startDate,
     DateTime? endDate,
-  }) async {
-    try {
-      Query query = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medications')
-          .orderBy('startDate', descending: true);
-
-      if (isActive != null) {
-        query = query.where('isActive', isEqualTo: isActive);
-      }
-
-      if (startDate != null) {
-        query = query.where('startDate',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
-      }
-
-      if (endDate != null) {
-        query = query.where('startDate',
-            isLessThanOrEqualTo: Timestamp.fromDate(endDate));
-      }
-
-      final querySnapshot = await query.get();
-      return querySnapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
-          .toList();
-    } catch (e) {
-      throw MedicationException('Error fetching medications: $e');
-    }
-  }
-
-  // Delete a medication
-  Future<void> deleteMedication({
-    required String medicationId,
-    required String petId,
-  }) async {
-    try {
-      // Delete the medication document and its administration history
-      final medicationRef = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medications')
-          .doc(medicationId);
-
-      final historySnapshot = await medicationRef
-          .collection('administrationHistory')
-          .get();
-
-      final batch = _firestore.batch();
-
-      // Delete all administration history documents
-      for (var doc in historySnapshot.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // Delete the medication document
-      batch.delete(medicationRef);
-
-      await batch.commit();
-    } catch (e) {
-      throw MedicationException('Error deleting medication: $e');
-    }
-  }
-
-  // Helper method to calculate next due date
-  DateTime calculateNextDueDate(DateTime lastAdministered, String frequency) {
-    switch (frequency.toLowerCase()) {
-      case 'daily':
-        return lastAdministered.add(const Duration(days: 1));
-      case 'twice daily':
-        return lastAdministered.add(const Duration(hours: 12));
-      case 'weekly':
-        return lastAdministered.add(const Duration(days: 7));
-      case 'monthly':
-        return DateTime(lastAdministered.year,
-            lastAdministered.month + 1, lastAdministered.day);
-      case 'every 8 hours':
-        return lastAdministered.add(const Duration(hours: 8));
-      case 'every 6 hours':
-        return lastAdministered.add(const Duration(hours: 6));
-      case 'every 4 hours':
-        return lastAdministered.add(const Duration(hours: 4));
-      default:
-        return lastAdministered.add(const Duration(days: 1));
-    }
-  }
-
-  // Get upcoming medication schedule
-  Future<List<Map<String, dynamic>>> getUpcomingMedications({
-    required String petId,
-    required DateTime fromDate,
-    required DateTime toDate,
-  }) async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medications')
-          .where('isActive', isEqualTo: true)
-          .where('nextDue',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(fromDate))
-          .where('nextDue', isLessThanOrEqualTo: Timestamp.fromDate(toDate))
-          .orderBy('nextDue')
-          .get();
-
-      return querySnapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
-          .toList();
-    } catch (e) {
-      throw MedicationException('Error fetching upcoming medications: $e');
-    }
+  ) {
+    final start = startDate ?? DateTime.now().subtract(const Duration(days: 30));
+    final end = endDate ?? DateTime.now();
+    
+    final expectedDoses = schedule.calculateExpectedDoses(start, end);
+    return expectedDoses - logs.length;
   }
 }
 

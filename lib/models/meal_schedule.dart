@@ -1,234 +1,231 @@
-// lib/models/meal_schedule.dart
-
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MealSchedule {
   final String id;
-  final String petId;  // Added petId
-  final TimeOfDay time;
-  final String name;
-  final double portionSize;
-  final String? foodType;
+  final String petId;
+  final List<ScheduledMeal> meals;
+  final Map<String, double> portions;
   final String? notes;
   final bool isActive;
-  final DateTime createdAt;
-  final DateTime? updatedAt;
-  // New premium features
-  final List<String> foodItems;  // References to FoodItem IDs
-  final Map<String, double> nutritionTargets;
-  final List<String> supplements;
-  final Map<String, dynamic> preparationInstructions;
-  final List<String> alternativeFoods;
-  final Map<String, bool> daysOfWeek;
-  final bool isRecurring;
-  final String? recurringPattern;
-  final DateTime? startDate;
+  final DateTime startDate;
   final DateTime? endDate;
-  final List<String> reminders;
-  final String? assignedTo;
-  final Map<String, dynamic>? seasonalAdjustments;
-  final Map<String, dynamic>? portionAdjustments;
-  final bool requiresPreparation;
-  final int preparationTimeMinutes;
-  final List<String> feedingTips;
-  final Map<String, dynamic>? mealHistory;
-  final bool isVetApproved;
-  final String? vetNotes;
+  final String? createdBy;
+  final DateTime createdAt;
+  final bool isPremium;
+  final Map<String, dynamic>? metadata;
+  final List<String>? dietaryRestrictions;
+  final Map<String, dynamic>? nutritionalGoals;
+  final List<String>? approvedFoods;
+  final List<String>? restrictedFoods;
+  final Map<String, dynamic>? feedingInstructions;
+  final String? veterinaryNotes;
 
   MealSchedule({
     required this.id,
     required this.petId,
-    required this.time,
-    required this.name,
-    required this.portionSize,
-    this.foodType,
+    required this.meals,
+    required this.portions,
     this.notes,
     this.isActive = true,
-    DateTime? createdAt,
-    this.updatedAt,
-    // New premium features
-    this.foodItems = const [],
-    this.nutritionTargets = const {},
-    this.supplements = const [],
-    this.preparationInstructions = const {},
-    this.alternativeFoods = const [],
-    this.daysOfWeek = const {
-      'monday': true,
-      'tuesday': true,
-      'wednesday': true,
-      'thursday': true,
-      'friday': true,
-      'saturday': true,
-      'sunday': true,
-    },
-    this.isRecurring = true,
-    this.recurringPattern,
-    this.startDate,
+    required this.startDate,
     this.endDate,
-    this.reminders = const [],
-    this.assignedTo,
-    this.seasonalAdjustments,
-    this.portionAdjustments,
-    this.requiresPreparation = false,
-    this.preparationTimeMinutes = 0,
-    this.feedingTips = const [],
-    this.mealHistory,
-    this.isVetApproved = false,
-    this.vetNotes,
-  }) : createdAt = createdAt ?? DateTime.now();
+    this.createdBy,
+    DateTime? createdAt,
+    this.isPremium = false,
+    this.metadata,
+    this.dietaryRestrictions,
+    this.nutritionalGoals,
+    this.approvedFoods,
+    this.restrictedFoods,
+    this.feedingInstructions,
+    this.veterinaryNotes,
+  }) : this.createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'petId': petId,
-      'time': '${time.hour}:${time.minute}',
-      'name': name,
-      'portionSize': portionSize,
-      'foodType': foodType,
+      'meals': meals.map((meal) => meal.toJson()).toList(),
+      'portions': portions,
       'notes': notes,
       'isActive': isActive,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
-      // New premium features
-      'foodItems': foodItems,
-      'nutritionTargets': nutritionTargets,
-      'supplements': supplements,
-      'preparationInstructions': preparationInstructions,
-      'alternativeFoods': alternativeFoods,
-      'daysOfWeek': daysOfWeek,
-      'isRecurring': isRecurring,
-      'recurringPattern': recurringPattern,
-      'startDate': startDate?.toIso8601String(),
+      'startDate': startDate.toIso8601String(),
       'endDate': endDate?.toIso8601String(),
-      'reminders': reminders,
-      'assignedTo': assignedTo,
-      'seasonalAdjustments': seasonalAdjustments,
-      'portionAdjustments': portionAdjustments,
-      'requiresPreparation': requiresPreparation,
-      'preparationTimeMinutes': preparationTimeMinutes,
-      'feedingTips': feedingTips,
-      'mealHistory': mealHistory,
-      'isVetApproved': isVetApproved,
-      'vetNotes': vetNotes,
+      'createdBy': createdBy,
+      'createdAt': createdAt.toIso8601String(),
+      'isPremium': isPremium,
+      'metadata': metadata,
+      'dietaryRestrictions': dietaryRestrictions,
+      'nutritionalGoals': nutritionalGoals,
+      'approvedFoods': approvedFoods,
+      'restrictedFoods': restrictedFoods,
+      'feedingInstructions': feedingInstructions,
+      'veterinaryNotes': veterinaryNotes,
     };
   }
 
   factory MealSchedule.fromJson(Map<String, dynamic> json) {
-    final timeStr = json['time'] as String;
-    final timeParts = timeStr.split(':');
-    
     return MealSchedule(
       id: json['id'],
       petId: json['petId'],
+      meals: (json['meals'] as List)
+          .map((meal) => ScheduledMeal.fromJson(meal))
+          .toList(),
+      portions: Map<String, double>.from(json['portions']),
+      notes: json['notes'],
+      isActive: json['isActive'] ?? true,
+      startDate: DateTime.parse(json['startDate']),
+      endDate: json['endDate'] != null 
+          ? DateTime.parse(json['endDate'])
+          : null,
+      createdBy: json['createdBy'],
+      createdAt: json['createdAt'] != null 
+          ? DateTime.parse(json['createdAt'])
+          : null,
+      isPremium: json['isPremium'] ?? false,
+      metadata: json['metadata'],
+      dietaryRestrictions: json['dietaryRestrictions'] != null 
+          ? List<String>.from(json['dietaryRestrictions'])
+          : null,
+      nutritionalGoals: json['nutritionalGoals'],
+      approvedFoods: json['approvedFoods'] != null 
+          ? List<String>.from(json['approvedFoods'])
+          : null,
+      restrictedFoods: json['restrictedFoods'] != null 
+          ? List<String>.from(json['restrictedFoods'])
+          : null,
+      feedingInstructions: json['feedingInstructions'],
+      veterinaryNotes: json['veterinaryNotes'],
+    );
+  }
+
+  List<ScheduledMeal> getMealsForDay(DateTime date) {
+    return meals.where((meal) => 
+      meal.daysOfWeek.contains(date.weekday)).toList();
+  }
+
+  bool isValidForDate(DateTime date) {
+    if (!isActive) return false;
+    if (date.isBefore(startDate)) return false;
+    if (endDate != null && date.isAfter(endDate!)) return false;
+    return true;
+  }
+
+  double getPortionForMeal(String mealType) => portions[mealType] ?? 0.0;
+
+  bool hasRestriction(String restriction) => 
+      dietaryRestrictions?.contains(restriction) ?? false;
+
+  bool isApprovedFood(String food) => 
+      approvedFoods?.contains(food) ?? true;
+
+  bool isRestrictedFood(String food) => 
+      restrictedFoods?.contains(food) ?? false;
+
+  bool canEdit(String userId) => createdBy == userId || !isPremium;
+
+  bool get isExpired => 
+      endDate != null && endDate!.isBefore(DateTime.now());
+
+  int get totalMealsPerDay => meals.length;
+
+  Map<int, List<ScheduledMeal>> getMealsByDay() {
+    final mealsByDay = <int, List<ScheduledMeal>>{};
+    for (var day = 1; day <= 7; day++) {
+      mealsByDay[day] = meals.where((meal) => 
+          meal.daysOfWeek.contains(day)).toList();
+    }
+    return mealsByDay;
+  }
+}
+
+class ScheduledMeal {
+  final String id;
+  final String type;
+  final TimeOfDay time;
+  final List<int> daysOfWeek;
+  final String? foodType;
+  final double? amount;
+  final String? unit;
+  final String? notes;
+  final Map<String, dynamic>? reminders;
+
+  ScheduledMeal({
+    required this.id,
+    required this.type,
+    required this.time,
+    required this.daysOfWeek,
+    this.foodType,
+    this.amount,
+    this.unit,
+    this.notes,
+    this.reminders,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'type': type,
+      'time': '${time.hour}:${time.minute}',
+      'daysOfWeek': daysOfWeek,
+      'foodType': foodType,
+      'amount': amount,
+      'unit': unit,
+      'notes': notes,
+      'reminders': reminders,
+    };
+  }
+
+  factory ScheduledMeal.fromJson(Map<String, dynamic> json) {
+    final timeParts = (json['time'] as String).split(':');
+    return ScheduledMeal(
+      id: json['id'],
+      type: json['type'],
       time: TimeOfDay(
         hour: int.parse(timeParts[0]),
         minute: int.parse(timeParts[1]),
       ),
-      name: json['name'],
-      portionSize: json['portionSize'].toDouble(),
+      daysOfWeek: List<int>.from(json['daysOfWeek']),
       foodType: json['foodType'],
+      amount: json['amount']?.toDouble(),
+      unit: json['unit'],
       notes: json['notes'],
-      isActive: json['isActive'] ?? true,
-      createdAt: (json['createdAt'] as Timestamp).toDate(),
-      updatedAt: json['updatedAt'] != null 
-          ? (json['updatedAt'] as Timestamp).toDate() 
-          : null,
-      // New premium features
-      foodItems: List<String>.from(json['foodItems'] ?? []),
-      nutritionTargets: Map<String, double>.from(json['nutritionTargets'] ?? {}),
-      supplements: List<String>.from(json['supplements'] ?? []),
-      preparationInstructions: 
-          Map<String, dynamic>.from(json['preparationInstructions'] ?? {}),
-      alternativeFoods: List<String>.from(json['alternativeFoods'] ?? []),
-      daysOfWeek: Map<String, bool>.from(json['daysOfWeek'] ?? {
-        'monday': true, 'tuesday': true, 'wednesday': true,
-        'thursday': true, 'friday': true, 'saturday': true, 'sunday': true,
-      }),
-      isRecurring: json['isRecurring'] ?? true,
-      recurringPattern: json['recurringPattern'],
-      startDate: json['startDate'] != null 
-          ? DateTime.parse(json['startDate']) 
-          : null,
-      endDate: json['endDate'] != null 
-          ? DateTime.parse(json['endDate']) 
-          : null,
-      reminders: List<String>.from(json['reminders'] ?? []),
-      assignedTo: json['assignedTo'],
-      seasonalAdjustments: json['seasonalAdjustments'],
-      portionAdjustments: json['portionAdjustments'],
-      requiresPreparation: json['requiresPreparation'] ?? false,
-      preparationTimeMinutes: json['preparationTimeMinutes'] ?? 0,
-      feedingTips: List<String>.from(json['feedingTips'] ?? []),
-      mealHistory: json['mealHistory'],
-      isVetApproved: json['isVetApproved'] ?? false,
-      vetNotes: json['vetNotes'],
+      reminders: json['reminders'],
     );
   }
 
-  // Helper methods
-  bool isScheduledForDay(String day) {
-    return daysOfWeek[day.toLowerCase()] ?? false;
+  String getFormattedTime() {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 
-  bool isCurrentlyActive() {
-    if (!isActive) return false;
-    final now = DateTime.now();
-    if (startDate != null && now.isBefore(startDate!)) return false;
-    if (endDate != null && now.isAfter(endDate!)) return false;
-    return true;
-  }
+  String getFormattedAmount() => 
+      amount != null ? '$amount ${unit ?? ''}' : 'N/A';
 
-  double getAdjustedPortion(String season) {
-    return seasonalAdjustments?[season]?.toDouble() ?? portionSize;
-  }
+  bool isScheduledForDay(int day) => daysOfWeek.contains(day);
 
-  List<String> getActiveReminders() {
-    return reminders.where((reminder) {
-      final reminderTime = DateTime.parse(reminder);
-      return reminderTime.isAfter(DateTime.now());
-    }).toList();
-  }
-
-  bool needsPreparation() {
-    return requiresPreparation && preparationTimeMinutes > 0;
-  }
-
-  DateTime getPreparationStartTime() {
-    final mealTime = DateTime.now().copyWith(
-      hour: time.hour,
-      minute: time.minute,
-    );
-    return mealTime.subtract(Duration(minutes: preparationTimeMinutes));
-  }
-
-  bool hasMetNutritionalTargets(Map<String, double> actualNutrition) {
-    for (var target in nutritionTargets.entries) {
-      final actual = actualNutrition[target.key] ?? 0;
-      if (actual < target.value * 0.9) return false; // Within 90% of target
-    }
-    return true;
+  bool isUpcoming(DateTime now) {
+    return time.hour > now.hour || 
+        (time.hour == now.hour && time.minute > now.minute);
   }
 }
 
-enum RecurringPattern {
-  daily,
-  weekdays,
-  weekends,
-  custom
+enum MealType {
+  breakfast,
+  lunch,
+  dinner,
+  snack
 }
 
-extension RecurringPatternExtension on RecurringPattern {
+extension MealTypeExtension on MealType {
   String get displayName {
     switch (this) {
-      case RecurringPattern.daily:
-        return 'Daily';
-      case RecurringPattern.weekdays:
-        return 'Weekdays';
-      case RecurringPattern.weekends:
-        return 'Weekends';
-      case RecurringPattern.custom:
-        return 'Custom';
+      case MealType.breakfast: return 'Breakfast';
+      case MealType.lunch: return 'Lunch';
+      case MealType.dinner: return 'Dinner';
+      case MealType.snack: return 'Snack';
     }
   }
 }

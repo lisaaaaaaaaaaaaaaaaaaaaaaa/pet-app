@@ -1,423 +1,468 @@
-// lib/providers/document_management_provider.dart
-
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:io';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:path/path.dart' as path;
-import 'package:mime/mime.dart';
-import '../services/pet_service.dart';
-import '../models/pet.dart';
+import '../utils/logger.dart';
+import 'dart:io';
+import 'dart:async';
 
 class DocumentManagementProvider with ChangeNotifier {
-  final PetService _petService = PetService();
-  final FirebaseStorage _storage = FirebaseStorage.instance;
-  
+  final FirebaseFirestore _firestore;
+  final FirebaseStorage _storage;
+  final FirebaseAnalytics _analytics;
+  final Logger _logger;
+
   Map<String, List<PetDocument>> _documents = {};
   Map<String, DateTime> _lastUpdated = {};
-  Map<String, Map<String, dynamic>> _documentAnalytics = {};
   bool _isLoading = false;
-  double _uploadProgress = 0.0;
   String? _error;
-  Duration _cacheExpiration = const Duration(hours: 1);
-  final int _maxFileSize = 20 * 1024 * 1024; // 20MB
-  final List<String> _allowedMimeTypes = [
-    'application/pdf',
-    'image/jpeg',
-    'image/png',
-    'image/heic',
-  ];
+  Timer? _cleanupTimer;
+  final Duration _cacheExpiration = const Duration(hours: 1);
 
-  // Enhanced Getters
+  DocumentManagementProvider({
+    FirebaseFirestore? firestore,
+    FirebaseStorage? storage,
+    FirebaseAnalytics? analytics,
+    Logger? logger,
+  }) : 
+    _firestore = firestore ?? FirebaseFirestore.instance,
+    _storage = storage ?? FirebaseStorage.instance,
+    _analytics = analytics ?? FirebaseAnalytics.instance,
+    _logger = logger ?? Logger() {
+    _initializeListeners();
+    _setupCleanupTimer();
+  }
+
+  // Getters
   bool get isLoading => _isLoading;
-  double get uploadProgress => _uploadProgress;
   String? get error => _error;
   Map<String, DateTime> get lastUpdated => _lastUpdated;
 
-  // Check if data needs refresh
-  bool _needsRefresh(String petId) {
-    final lastUpdate = _lastUpdated[petId];
-    if (lastUpdate == null) return true;
-    return DateTime.now().difference(lastUpdate) > _cacheExpiration;
+  void _initializeListeners() {
+    _firestore.collection('pet_documents')
+        .snapshots()
+        .listen(_handleDocumentUpdates);
   }
 
-  // Enhanced document retrieval
-  Future<List<PetDocument>> getDocumentsForPet(
+  void _setupCleanupTimer() {
+    _cleanupTimer?.cancel();
+    _cleanupTimer = Timer.periodic(
+      const Duration(hours: 24),
+      (_) => _cleanupExpiredCache(),
+    );
+  }
+
+  Future<void> _handleDocumentUpdates(QuerySnapshot snapshot) async {
+    for (var change in snapshot.docChanges) {
+      final data = change.doc.data() as Map<String, dynamic>;
+      final petId = data['petId'] as String;
+
+      switch (change.type) {
+        case DocumentChangeType.added:
+        case DocumentChangeType.modified:
+          await loadDocuments(petId, silent: true);
+          break;
+        case DocumentChangeType.removed:
+          _removeDocument(petId, change.doc.id);
+          break;
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<List<PetDocument>> getDocuments(
     String petId, {
     bool forceRefresh = false,
-    String? type,
+    String? category,
+    DateTime? startDate,
+    DateTime? endDate,
     List<String>? tags,
-    bool includeExpired = false,
   }) async {
     if (forceRefresh || _needsRefresh(petId)) {
-      await loadDocuments(petId, type: type);
+      await loadDocuments(petId);
     }
 
     var docs = _documents[petId] ?? [];
 
     // Apply filters
-    if (type != null) {
-      docs = docs.where((doc) => 
-        doc.type.toLowerCase() == type.toLowerCase()
-      ).toList();
+    if (category != null) {
+      docs = docs.where((doc) => doc.category == category).toList();
     }
-
+    if (startDate != null) {
+      docs = docs.where((doc) => doc.uploadDate.isAfter(startDate)).toList();
+    }
+    if (endDate != null) {
+      docs = docs.where((doc) => doc.uploadDate.isBefore(endDate)).toList();
+    }
     if (tags != null && tags.isNotEmpty) {
-      docs = docs.where((doc) => 
-        tags.any((tag) => doc.tags.contains(tag.toLowerCase()))
-      ).toList();
-    }
-
-    if (!includeExpired) {
-      final now = DateTime.now();
-      docs = docs.where((doc) => 
-        doc.expiryDate == null || doc.expiryDate!.isAfter(now)
+      docs = docs.where(
+        (doc) => tags.any((tag) => doc.tags.contains(tag))
       ).toList();
     }
 
     return docs;
   }
 
-  // Enhanced document upload
-  Future<void> uploadAndAddDocument({
+  Future<void> uploadDocument({
     required String petId,
     required File file,
-    required String name,
-    required String type,
+    required String category,
+    String? title,
     String? description,
-    DateTime? expiryDate,
     List<String>? tags,
-    bool isSharedWithVet = false,
     Map<String, dynamic>? metadata,
-    String? category,
-    List<String>? relatedDocuments,
-    bool isConfidential = false,
   }) async {
     try {
+      _isLoading = true;
+      notifyListeners();
+
       // Validate file
       await _validateFile(file);
 
-      _isLoading = true;
-      _uploadProgress = 0.0;
-      notifyListeners();
+      // Generate unique filename
+      final filename = '${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path)}';
+      final storagePath = 'pet_documents/$petId/$filename';
 
-      final String fileName = _generateSecureFileName(file);
-      final String filePath = _generateStoragePath(petId, fileName);
-
-      // Prepare metadata
-      final SettableMetadata fileMetadata = SettableMetadata(
-        contentType: lookupMimeType(file.path),
-        customMetadata: {
-          'name': name,
-          'type': type,
-          'uploadDate': DateTime.now().toIso8601String(),
-          'category': category ?? 'uncategorized',
-          'isConfidential': isConfidential.toString(),
-        },
-      );
-
-      // Create upload task with metadata
-      final uploadTask = _storage.ref(filePath).putFile(
+      // Upload to Firebase Storage
+      final storageRef = _storage.ref().child(storagePath);
+      final uploadTask = storageRef.putFile(
         file,
-        fileMetadata,
+        SettableMetadata(
+          contentType: _getContentType(file.path),
+          customMetadata: {
+            'category': category,
+            'originalName': path.basename(file.path),
+          },
+        ),
       );
 
       // Monitor upload progress
-      uploadTask.snapshotEvents.listen(
-        (TaskSnapshot snapshot) {
-          _uploadProgress = snapshot.bytesTransferred / snapshot.totalBytes;
-          notifyListeners();
-        },
-        onError: (error) {
-          throw Exception('Upload failed: $error');
-        },
-      );
+      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+        final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+        _logger.info('Upload progress: ${(progress * 100).toStringAsFixed(2)}%');
+      });
 
       // Wait for upload to complete
-      final snapshot = await uploadTask;
-      final String downloadUrl = await snapshot.ref.getDownloadURL();
+      await uploadTask.whenComplete(() => null);
+      final downloadUrl = await storageRef.getDownloadURL();
 
-      // Add document to database
-      final document = await _petService.addDocument(
+      // Create document record in Firestore
+      final document = PetDocument(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
         petId: petId,
-        name: name,
-        type: type,
-        url: downloadUrl,
+        title: title ?? path.basenameWithoutExtension(file.path),
         description: description,
-        expiryDate: expiryDate,
-        tags: tags,
-        isSharedWithVet: isSharedWithVet,
-        metadata: {
-          ...?metadata,
-          'fileName': fileName,
-          'fileSize': await file.length(),
-          'mimeType': lookupMimeType(file.path),
-          'category': category,
-          'isConfidential': isConfidential,
-          'relatedDocuments': relatedDocuments,
-          'uploadDate': DateTime.now().toIso8601String(),
-        },
+        category: category,
+        fileUrl: downloadUrl,
+        filePath: storagePath,
+        fileType: _getFileType(file.path),
+        size: await file.length(),
+        tags: tags ?? [],
+        metadata: metadata ?? {},
+        uploadDate: DateTime.now(),
       );
+
+      await _firestore.collection('pet_documents').add(document.toJson());
 
       // Update local cache
       final docs = _documents[petId] ?? [];
-      docs.insert(0, PetDocument.fromJson(document));
+      docs.add(document);
       _documents[petId] = docs;
+      _lastUpdated[petId] = DateTime.now();
 
-      await _updateDocumentAnalytics(petId);
+      // Track event
+      await _analytics.logEvent(
+        name: 'document_uploaded',
+        parameters: {
+          'pet_id': petId,
+          'category': category,
+          'file_type': document.fileType,
+        },
+      );
+
       _error = null;
+
     } catch (e, stackTrace) {
-      _error = _handleError('Upload failed', e, stackTrace);
+      _error = _handleError('Failed to upload document', e, stackTrace);
       rethrow;
     } finally {
       _isLoading = false;
-      _uploadProgress = 0.0;
       notifyListeners();
     }
   }
 
-  // Validate file before upload
+  Future<void> updateDocument({
+    required String documentId,
+    required String petId,
+    String? title,
+    String? description,
+    String? category,
+    List<String>? tags,
+    Map<String, dynamic>? metadata,
+  }) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final updates = <String, dynamic>{
+        if (title != null) 'title': title,
+        if (description != null) 'description': description,
+        if (category != null) 'category': category,
+        if (tags != null) 'tags': tags,
+        if (metadata != null) 'metadata': metadata,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      await _firestore
+          .collection('pet_documents')
+          .doc(documentId)
+          .update(updates);
+
+      // Update local cache
+      final docs = _documents[petId] ?? [];
+      final index = docs.indexWhere((doc) => doc.id == documentId);
+      if (index != -1) {
+        docs[index] = docs[index].copyWith(
+          title: title,
+          description: description,
+          category: category,
+          tags: tags,
+          metadata: metadata,
+        );
+        _documents[petId] = docs;
+      }
+
+      _error = null;
+
+    } catch (e, stackTrace) {
+      _error = _handleError('Failed to update document', e, stackTrace);
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteDocument(String petId, String documentId) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      // Get document reference
+      final doc = await _firestore
+          .collection('pet_documents')
+          .doc(documentId)
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        final filePath = data['filePath'] as String;
+
+        // Delete from Storage
+        await _storage.ref().child(filePath).delete();
+
+        // Delete from Firestore
+        await doc.reference.delete();
+
+        // Update local cache
+        _removeDocument(petId, documentId);
+      }
+
+      _error = null;
+
+    } catch (e, stackTrace) {
+      _error = _handleError('Failed to delete document', e, stackTrace);
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadDocuments(String petId, {bool silent = false}) async {
+    try {
+      if (!silent) {
+        _isLoading = true;
+        notifyListeners();
+      }
+
+      final snapshot = await _firestore
+          .collection('pet_documents')
+          .where('petId', isEqualTo: petId)
+          .get();
+
+      _documents[petId] = snapshot.docs
+          .map((doc) => PetDocument.fromJson(doc.data()))
+          .toList();
+      _lastUpdated[petId] = DateTime.now();
+
+      if (!silent) _error = null;
+
+    } catch (e, stackTrace) {
+      _error = _handleError('Failed to load documents', e, stackTrace);
+      if (!silent) rethrow;
+    } finally {
+      if (!silent) {
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> _validateFile(File file) async {
     final size = await file.length();
-    if (size > _maxFileSize) {
+    final maxSize = 20 * 1024 * 1024; // 20MB
+
+    if (size > maxSize) {
       throw DocumentException('File size exceeds 20MB limit');
     }
 
-    final mimeType = lookupMimeType(file.path);
-    if (mimeType == null || !_allowedMimeTypes.contains(mimeType)) {
-      throw DocumentException('Invalid file type. Allowed types: PDF, JPEG, PNG, HEIC');
+    final extension = path.extension(file.path).toLowerCase();
+    final allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx'];
+
+    if (!allowedExtensions.contains(extension)) {
+      throw DocumentException('File type not supported');
     }
   }
 
-  String _generateSecureFileName(File file) {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final random = DateTime.now().microsecond;
-    final extension = path.extension(file.path);
-    return '$timestamp$random$extension';
-  }
-
-  String _generateStoragePath(String petId, String fileName) {
-    return 'pets/$petId/documents/${DateTime.now().year}/${DateTime.now().month}/$fileName';
-  }
-
-  // ... (continued in next part)
-  // Continuing lib/providers/document_management_provider.dart
-
-  // Enhanced document deletion with backup
-  Future<void> deleteDocument({
-    required String petId,
-    required String documentId,
-    required String storageUrl,
-    bool softDelete = true,
-  }) async {
-    try {
-      _isLoading = true;
-      notifyListeners();
-
-      if (softDelete) {
-        // Move to archive instead of deleting
-        await _archiveDocument(petId, documentId, storageUrl);
-      } else {
-        // Permanent deletion
-        if (storageUrl.isNotEmpty) {
-          await _storage.refFromURL(storageUrl).delete();
-        }
-        await _petService.deleteDocument(petId, documentId);
-      }
-
-      // Update local cache
-      _documents[petId]?.removeWhere((doc) => doc.id == documentId);
-      await _updateDocumentAnalytics(petId);
-      _error = null;
-    } catch (e, stackTrace) {
-      _error = _handleError('Delete failed', e, stackTrace);
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+  String _getContentType(String filepath) {
+    final ext = path.extension(filepath).toLowerCase();
+    switch (ext) {
+      case '.pdf':
+        return 'application/pdf';
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.doc':
+        return 'application/msword';
+      case '.docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      default:
+        return 'application/octet-stream';
     }
   }
 
-  Future<void> _archiveDocument(
-    String petId,
-    String documentId,
-    String storageUrl,
-  ) async {
-    final document = _documents[petId]?.firstWhere((doc) => doc.id == documentId);
-    if (document == null) throw DocumentException('Document not found');
-
-    // Create archive copy
-    await _petService.updateDocument(
-      petId: petId,
-      documentId: documentId,
-      isArchived: true,
-      archivedAt: DateTime.now(),
-      isActive: false,
-    );
+  String _getFileType(String filepath) {
+    return path.extension(filepath).toLowerCase().replaceAll('.', '');
   }
 
-  // Enhanced metadata update with version control
-  Future<void> updateDocumentMetadata({
-    required String petId,
-    required String documentId,
-    String? name,
-    String? description,
-    DateTime? expiryDate,
-    List<String>? tags,
-    bool? isSharedWithVet,
-    Map<String, dynamic>? metadata,
-    String? category,
-    List<String>? relatedDocuments,
-    bool? isConfidential,
-  }) async {
-    try {
-      _isLoading = true;
-      notifyListeners();
-
-      // Get current document
-      final currentDoc = _documents[petId]?.firstWhere(
-        (doc) => doc.id == documentId,
-        orElse: () => throw DocumentException('Document not found'),
-      );
-
-      // Create version history
-      final versionHistory = {
-        'timestamp': DateTime.now().toIso8601String(),
-        'previousValues': {
-          'name': currentDoc?.name,
-          'description': currentDoc?.description,
-          'expiryDate': currentDoc?.expiryDate?.toIso8601String(),
-          'tags': currentDoc?.tags,
-          'isSharedWithVet': currentDoc?.isSharedWithVet,
-          'category': currentDoc?.metadata?['category'],
-        },
-      };
-
-      // Update document with version history
-      await _petService.updateDocument(
-        petId: petId,
-        documentId: documentId,
-        name: name,
-        description: description,
-        expiryDate: expiryDate,
-        tags: tags,
-        isSharedWithVet: isSharedWithVet,
-        metadata: {
-          ...?metadata,
-          'lastModified': DateTime.now().toIso8601String(),
-          'category': category,
-          'isConfidential': isConfidential,
-          'relatedDocuments': relatedDocuments,
-          'versionHistory': [...?currentDoc?.metadata?['versionHistory'], versionHistory],
-        },
-      );
-
-      await loadDocuments(petId);
-      _error = null;
-    } catch (e, stackTrace) {
-      _error = _handleError('Update failed', e, stackTrace);
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  // Document analytics
-  Future<void> _updateDocumentAnalytics(String petId) async {
+  void _removeDocument(String petId, String documentId) {
     final docs = _documents[petId] ?? [];
-    
-    _documentAnalytics[petId] = {
-      'totalDocuments': docs.length,
-      'byType': _analyzeDocumentsByType(docs),
-      'byCategory': _analyzeDocumentsByCategory(docs),
-      'expiryAnalysis': _analyzeDocumentExpiry(docs),
-      'storageUsage': _calculateStorageUsage(docs),
-      'sharingAnalysis': _analyzeSharingStatus(docs),
-      'ageDistribution': _analyzeDocumentAge(docs),
-      'lastUpdated': DateTime.now().toIso8601String(),
-    };
+    docs.removeWhere((doc) => doc.id == documentId);
+    _documents[petId] = docs;
+    notifyListeners();
   }
 
-  Map<String, dynamic> _analyzeDocumentsByType(List<PetDocument> docs) {
-    final typeMap = <String, int>{};
-    for (var doc in docs) {
-      typeMap[doc.type] = (typeMap[doc.type] ?? 0) + 1;
-    }
-    return {
-      'distribution': typeMap,
-      'mostCommon': typeMap.entries.isEmpty ? null :
-        typeMap.entries.reduce((a, b) => a.value > b.value ? a : b).key,
-    };
-  }
-
-  Map<String, dynamic> _analyzeDocumentExpiry(List<PetDocument> docs) {
+  void _cleanupExpiredCache() {
     final now = DateTime.now();
-    final expired = docs.where((doc) => 
-      doc.expiryDate != null && doc.expiryDate!.isBefore(now)
-    ).length;
-    final expiringSoon = docs.where((doc) => 
-      doc.expiryDate != null && 
-      doc.expiryDate!.isAfter(now) && 
-      doc.expiryDate!.isBefore(now.add(const Duration(days: 30)))
-    ).length;
-
-    return {
-      'expired': expired,
-      'expiringSoon': expiringSoon,
-      'validDocuments': docs.length - expired,
-      'documentsWithoutExpiry': docs.where((doc) => doc.expiryDate == null).length,
-    };
+    _lastUpdated.removeWhere(
+      (petId, timestamp) => now.difference(timestamp) > _cacheExpiration
+    );
+    notifyListeners();
   }
 
-  Map<String, dynamic> generateDocumentReport(String petId) {
-    final analytics = _documentAnalytics[petId];
-    if (analytics == null) return {};
-
-    return {
-      'summary': {
-        'totalDocuments': analytics['totalDocuments'],
-        'storageUsage': analytics['storageUsage'],
-        'lastUpdated': analytics['lastUpdated'],
-      },
-      'documentTypes': analytics['byType'],
-      'categories': analytics['byCategory'],
-      'expiry': analytics['expiryAnalysis'],
-      'sharing': analytics['sharingAnalysis'],
-      'ageDistribution': analytics['ageDistribution'],
-      'recommendations': generateDocumentRecommendations(petId),
-    };
-  }
-
-  List<String> generateDocumentRecommendations(String petId) {
-    final analytics = _documentAnalytics[petId];
-    if (analytics == null) return [];
-
-    final recommendations = <String>[];
-    final expiryAnalysis = analytics['expiryAnalysis'] as Map<String, dynamic>;
-
-    if (expiryAnalysis['expired'] > 0) {
-      recommendations.add(
-        'Update ${expiryAnalysis['expired']} expired document(s)'
-      );
-    }
-
-    if (expiryAnalysis['expiringSoon'] > 0) {
-      recommendations.add(
-        'Review ${expiryAnalysis['expiringSoon']} document(s) expiring soon'
-      );
-    }
-
-    // Add more specific recommendations based on analytics
-
-    return recommendations;
+  bool _needsRefresh(String petId) {
+    final lastUpdate = _lastUpdated[petId];
+    if (lastUpdate == null) return true;
+    return DateTime.now().difference(lastUpdate) > _cacheExpiration;
   }
 
   String _handleError(String operation, dynamic error, StackTrace stackTrace) {
-    debugPrint('Document Management Error: $operation');
-    debugPrint('Error: $error');
-    debugPrint('StackTrace: $stackTrace');
+    _logger.error(operation, error, stackTrace);
     return 'Failed to $operation: ${error.toString()}';
   }
+
+  @override
+  void dispose() {
+    _cleanupTimer?.cancel();
+    super.dispose();
+  }
+}
+
+class PetDocument {
+  final String id;
+  final String petId;
+  final String title;
+  final String? description;
+  final String category;
+  final String fileUrl;
+  final String filePath;
+  final String fileType;
+  final int size;
+  final List<String> tags;
+  final Map<String, dynamic> metadata;
+  final DateTime uploadDate;
+
+  PetDocument({
+    required this.id,
+    required this.petId,
+    required this.title,
+    this.description,
+    required this.category,
+    required this.fileUrl,
+    required this.filePath,
+    required this.fileType,
+    required this.size,
+    required this.tags,
+    required this.metadata,
+    required this.uploadDate,
+  });
+
+  PetDocument copyWith({
+    String? title,
+    String? description,
+    String? category,
+    List<String>? tags,
+    Map<String, dynamic>? metadata,
+  }) {
+    return PetDocument(
+      id: id,
+      petId: petId,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      fileUrl: fileUrl,
+      filePath: filePath,
+      fileType: fileType,
+      size: size,
+      tags: tags ?? this.tags,
+      metadata: metadata ?? this.metadata,
+      uploadDate: uploadDate,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'petId': petId,
+    'title': title,
+    'description': description,
+    'category': category,
+    'fileUrl': fileUrl,
+    'filePath': filePath,
+    'fileType': fileType,
+    'size': size,
+    'tags': tags,
+    'metadata': metadata,
+    'uploadDate': uploadDate.toIso8601String(),
+  };
+
+  factory PetDocument.fromJson(Map<String, dynamic> json) => PetDocument(
+    id: json['id'],
+    petId: json['petId'],
+    title: json['title'],
+    description: json['description'],
+    category: json['category'],
+    fileUrl: json['fileUrl'],
+    filePath: json['filePath'],
+    fileType: json['fileType'],
+    size: json['size'],
+    tags: List<String>.from(json['tags'] ?? []),
+    metadata: json['metadata'] ?? {},
+    uploadDate: DateTime.parse(json['uploadDate']),
+  );
 }
 
 class DocumentException implements Exception {

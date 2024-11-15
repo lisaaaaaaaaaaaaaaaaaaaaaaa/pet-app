@@ -1,228 +1,193 @@
-// lib/models/comfort_recommendation.dart
-
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ComfortRecommendation {
   final String id;
+  final String petId;
   final String title;
   final String description;
-  final List<String> tags;
   final String category;
-  final List<String> equipmentNeeded;
-  final int difficultyLevel;
-  final bool isVerified;
+  final int priority;
+  final bool isActive;
   final DateTime createdAt;
-  final List<String> images;
-  // New premium features
-  final String createdBy;
-  final List<String> approvedBy;
-  final List<String> veterinaryNotes;
-  final Map<String, dynamic>? contraindications;
-  final List<String> applicablePetTypes;
-  final List<String> applicableConditions;
-  final Map<String, dynamic> steps;
-  final Map<String, dynamic>? expectedOutcomes;
-  final int recommendedFrequency;
-  final String? videoUrl;
-  final double? successRate;
-  final List<String> precautions;
-  final Map<String, dynamic>? scientificReferences;
+  final String? createdBy;
+  final List<String> tags;
+  final Map<String, dynamic>? metadata;
   final bool isPremium;
+  final List<String>? attachments;
+  final Map<String, dynamic>? customFields;
+  final DateTime? lastUpdated;
+  final String? updatedBy;
+  final bool isAutomated;
+  final Map<String, dynamic>? conditions;
+  final List<String>? relatedRecommendations;
+  final double? successRate;
+  final int implementationCount;
 
   ComfortRecommendation({
     required this.id,
+    required this.petId,
     required this.title,
     required this.description,
-    required this.tags,
     required this.category,
-    this.equipmentNeeded = const [],
-    this.difficultyLevel = 1,
-    this.isVerified = false,
-    required this.createdAt,
-    this.images = const [],
-    // New premium features
-    required this.createdBy,
-    this.approvedBy = const [],
-    this.veterinaryNotes = const [],
-    this.contraindications,
-    this.applicablePetTypes = const [],
-    this.applicableConditions = const [],
-    required this.steps,
-    this.expectedOutcomes,
-    this.recommendedFrequency = 1,
-    this.videoUrl,
-    this.successRate,
-    this.precautions = const [],
-    this.scientificReferences,
+    this.priority = 1,
+    this.isActive = true,
+    DateTime? createdAt,
+    this.createdBy,
+    this.tags = const [],
+    this.metadata,
     this.isPremium = false,
-  });
+    this.attachments,
+    this.customFields,
+    this.lastUpdated,
+    this.updatedBy,
+    this.isAutomated = false,
+    this.conditions,
+    this.relatedRecommendations,
+    this.successRate,
+    this.implementationCount = 0,
+  }) : this.createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'petId': petId,
       'title': title,
       'description': description,
-      'tags': tags,
       'category': category,
-      'equipmentNeeded': equipmentNeeded,
-      'difficultyLevel': difficultyLevel,
-      'isVerified': isVerified,
+      'priority': priority,
+      'isActive': isActive,
       'createdAt': createdAt.toIso8601String(),
-      'images': images,
-      // New premium features
       'createdBy': createdBy,
-      'approvedBy': approvedBy,
-      'veterinaryNotes': veterinaryNotes,
-      'contraindications': contraindications,
-      'applicablePetTypes': applicablePetTypes,
-      'applicableConditions': applicableConditions,
-      'steps': steps,
-      'expectedOutcomes': expectedOutcomes,
-      'recommendedFrequency': recommendedFrequency,
-      'videoUrl': videoUrl,
-      'successRate': successRate,
-      'precautions': precautions,
-      'scientificReferences': scientificReferences,
+      'tags': tags,
+      'metadata': metadata,
       'isPremium': isPremium,
+      'attachments': attachments,
+      'customFields': customFields,
+      'lastUpdated': lastUpdated?.toIso8601String(),
+      'updatedBy': updatedBy,
+      'isAutomated': isAutomated,
+      'conditions': conditions,
+      'relatedRecommendations': relatedRecommendations,
+      'successRate': successRate,
+      'implementationCount': implementationCount,
     };
   }
 
   factory ComfortRecommendation.fromJson(Map<String, dynamic> json) {
     return ComfortRecommendation(
       id: json['id'],
+      petId: json['petId'],
       title: json['title'],
       description: json['description'],
-      tags: List<String>.from(json['tags'] ?? []),
       category: json['category'],
-      equipmentNeeded: List<String>.from(json['equipmentNeeded'] ?? []),
-      difficultyLevel: json['difficultyLevel'] ?? 1,
-      isVerified: json['isVerified'] ?? false,
-      createdAt: DateTime.parse(json['createdAt']),
-      images: List<String>.from(json['images'] ?? []),
-      // New premium features
+      priority: json['priority'] ?? 1,
+      isActive: json['isActive'] ?? true,
+      createdAt: json['createdAt'] != null 
+          ? DateTime.parse(json['createdAt'])
+          : null,
       createdBy: json['createdBy'],
-      approvedBy: List<String>.from(json['approvedBy'] ?? []),
-      veterinaryNotes: List<String>.from(json['veterinaryNotes'] ?? []),
-      contraindications: json['contraindications'],
-      applicablePetTypes: List<String>.from(json['applicablePetTypes'] ?? []),
-      applicableConditions: List<String>.from(json['applicableConditions'] ?? []),
-      steps: Map<String, dynamic>.from(json['steps'] ?? {}),
-      expectedOutcomes: json['expectedOutcomes'],
-      recommendedFrequency: json['recommendedFrequency'] ?? 1,
-      videoUrl: json['videoUrl'],
-      successRate: json['successRate']?.toDouble(),
-      precautions: List<String>.from(json['precautions'] ?? []),
-      scientificReferences: json['scientificReferences'],
+      tags: List<String>.from(json['tags'] ?? []),
+      metadata: json['metadata'],
       isPremium: json['isPremium'] ?? false,
+      attachments: json['attachments'] != null 
+          ? List<String>.from(json['attachments'])
+          : null,
+      customFields: json['customFields'],
+      lastUpdated: json['lastUpdated'] != null 
+          ? DateTime.parse(json['lastUpdated'])
+          : null,
+      updatedBy: json['updatedBy'],
+      isAutomated: json['isAutomated'] ?? false,
+      conditions: json['conditions'],
+      relatedRecommendations: json['relatedRecommendations'] != null 
+          ? List<String>.from(json['relatedRecommendations'])
+          : null,
+      successRate: json['successRate']?.toDouble(),
+      implementationCount: json['implementationCount'] ?? 0,
     );
   }
 
-  // Helper methods
-  bool isApprovedByVet() {
-    return approvedBy.isNotEmpty;
+  ComfortRecommendation copyWith({
+    String? id,
+    String? petId,
+    String? title,
+    String? description,
+    String? category,
+    int? priority,
+    bool? isActive,
+    DateTime? createdAt,
+    String? createdBy,
+    List<String>? tags,
+    Map<String, dynamic>? metadata,
+    bool? isPremium,
+    List<String>? attachments,
+    Map<String, dynamic>? customFields,
+    DateTime? lastUpdated,
+    String? updatedBy,
+    bool? isAutomated,
+    Map<String, dynamic>? conditions,
+    List<String>? relatedRecommendations,
+    double? successRate,
+    int? implementationCount,
+  }) {
+    return ComfortRecommendation(
+      id: id ?? this.id,
+      petId: petId ?? this.petId,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      priority: priority ?? this.priority,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      createdBy: createdBy ?? this.createdBy,
+      tags: tags ?? this.tags,
+      metadata: metadata ?? this.metadata,
+      isPremium: isPremium ?? this.isPremium,
+      attachments: attachments ?? this.attachments,
+      customFields: customFields ?? this.customFields,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+      updatedBy: updatedBy ?? this.updatedBy,
+      isAutomated: isAutomated ?? this.isAutomated,
+      conditions: conditions ?? this.conditions,
+      relatedRecommendations: relatedRecommendations ?? this.relatedRecommendations,
+      successRate: successRate ?? this.successRate,
+      implementationCount: implementationCount ?? this.implementationCount,
+    );
   }
 
-  String getDifficultyText() {
-    switch (difficultyLevel) {
-      case 1:
-        return 'Easy';
-      case 2:
-        return 'Moderate';
-      case 3:
-        return 'Advanced';
-      default:
-        return 'Unknown';
-    }
-  }
-
-  bool isApplicableForPetType(String petType) {
-    return applicablePetTypes.isEmpty || 
-           applicablePetTypes.contains(petType.toLowerCase());
-  }
-
-  bool hasContraindication(String condition) {
-    if (contraindications == null) return false;
-    return contraindications!.containsKey(condition.toLowerCase());
-  }
-
-  String getFrequencyText() {
-    if (recommendedFrequency == 1) return 'Once daily';
-    if (recommendedFrequency == 2) return 'Twice daily';
-    return '$recommendedFrequency times daily';
-  }
-
-  String getSuccessRateText() {
-    if (successRate == null) return 'Not rated';
-    return '${(successRate! * 100).toStringAsFixed(1)}% success rate';
-  }
-
-  bool requiresProfessionalSupervision() {
-    return difficultyLevel >= 3 || 
-           precautions.any((p) => p.toLowerCase().contains('supervision'));
+  bool canEdit(String userId) => createdBy == userId || !isPremium;
+  bool get isNew => createdAt.isAfter(DateTime.now().subtract(const Duration(days: 7)));
+  bool get isHighPriority => priority >= 4;
+  String get priorityLabel {
+    if (priority >= 4) return 'High';
+    if (priority >= 2) return 'Medium';
+    return 'Low';
   }
 }
 
-enum ComfortCategory {
+enum RecommendationCategory {
+  environment,
+  diet,
   exercise,
-  massage,
-  stretching,
-  relaxation,
-  therapy,
-  environmental,
-  dietary,
-  behavioral,
   medical,
+  behavioral,
+  social,
+  grooming,
   other
 }
 
-extension ComfortCategoryExtension on ComfortCategory {
+extension RecommendationCategoryExtension on RecommendationCategory {
   String get displayName {
     switch (this) {
-      case ComfortCategory.exercise:
-        return 'Exercise';
-      case ComfortCategory.massage:
-        return 'Massage';
-      case ComfortCategory.stretching:
-        return 'Stretching';
-      case ComfortCategory.relaxation:
-        return 'Relaxation';
-      case ComfortCategory.therapy:
-        return 'Therapy';
-      case ComfortCategory.environmental:
-        return 'Environmental';
-      case ComfortCategory.dietary:
-        return 'Dietary';
-      case ComfortCategory.behavioral:
-        return 'Behavioral';
-      case ComfortCategory.medical:
-        return 'Medical';
-      case ComfortCategory.other:
-        return 'Other';
-    }
-  }
-
-  String get icon {
-    switch (this) {
-      case ComfortCategory.exercise:
-        return '🏃';
-      case ComfortCategory.massage:
-        return '💆';
-      case ComfortCategory.stretching:
-        return '🧘';
-      case ComfortCategory.relaxation:
-        return '😌';
-      case ComfortCategory.therapy:
-        return '🏥';
-      case ComfortCategory.environmental:
-        return '🏠';
-      case ComfortCategory.dietary:
-        return '🍽';
-      case ComfortCategory.behavioral:
-        return '🧠';
-      case ComfortCategory.medical:
-        return '💊';
-      case ComfortCategory.other:
-        return '❓';
+      case RecommendationCategory.environment: return 'Environment';
+      case RecommendationCategory.diet: return 'Diet & Nutrition';
+      case RecommendationCategory.exercise: return 'Exercise & Activity';
+      case RecommendationCategory.medical: return 'Medical Care';
+      case RecommendationCategory.behavioral: return 'Behavioral';
+      case RecommendationCategory.social: return 'Social & Mental';
+      case RecommendationCategory.grooming: return 'Grooming';
+      case RecommendationCategory.other: return 'Other';
     }
   }
 }

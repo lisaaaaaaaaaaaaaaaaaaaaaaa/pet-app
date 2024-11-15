@@ -1,279 +1,309 @@
 import 'package:flutter/material.dart';
+import '../models/diet_record.dart';
 import '../theme/app_theme.dart';
+import '../utils/date_formatter.dart';
 import 'common/custom_card.dart';
 
 class DietTrackerCard extends StatelessWidget {
-  final String petName;
-  final String foodType;
-  final double dailyAmount;
-  final String unit;
-  final int mealsPerDay;
-  final double progress;
-  final List<MealLog>? recentMeals;
-  final VoidCallback? onAddMeal;
-  final VoidCallback? onViewDetails;
-  final bool isLoading;
-  final String? nextMealTime;
-  final Map<String, dynamic>? nutritionInfo;
+  final DietRecord record;
+  final VoidCallback? onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final bool showActions;
+  final bool isExpanded;
 
   const DietTrackerCard({
     Key? key,
-    required this.petName,
-    required this.foodType,
-    required this.dailyAmount,
-    required this.unit,
-    required this.mealsPerDay,
-    required this.progress,
-    this.recentMeals,
-    this.onAddMeal,
-    this.onViewDetails,
-    this.isLoading = false,
-    this.nextMealTime,
-    this.nutritionInfo,
+    required this.record,
+    this.onTap,
+    this.onEdit,
+    this.onDelete,
+    this.showActions = true,
+    this.isExpanded = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return CustomCard(
-      onTap: onViewDetails,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Diet Tracker',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: AppTheme.primaryGreen,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    petName,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.secondaryGreen,
-                        ),
-                  ),
-                ],
-              ),
-              if (onAddMeal != null)
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  color: AppTheme.primaryGreen,
-                  onPressed: isLoading ? null : onAddMeal,
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (isLoading)
-            const Center(child: CircularProgressIndicator())
-          else ...[
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
               children: [
+                _buildMealTypeIcon(),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: _buildInfoColumn(
-                    context,
-                    'Food Type',
-                    foodType,
-                    Icons.restaurant,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        record.mealType,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimaryColor,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        DateFormatter.formatDateTime(record.timestamp),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppTheme.textSecondaryColor,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Expanded(
-                  child: _buildInfoColumn(
-                    context,
-                    'Daily Amount',
-                    '$dailyAmount $unit',
-                    Icons.scale,
+                if (showActions) ...[
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: onEdit,
+                    color: AppTheme.primaryColor,
+                    iconSize: 20,
                   ),
-                ),
-                Expanded(
-                  child: _buildInfoColumn(
-                    context,
-                    'Meals/Day',
-                    mealsPerDay.toString(),
-                    Icons.access_time,
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: onDelete,
+                    color: AppTheme.errorColor,
+                    iconSize: 20,
                   ),
-                ),
+                ],
               ],
             ),
-            const SizedBox(height: 20),
-            if (nextMealTime != null) ...[
-              Text(
-                'Next Meal: $nextMealTime',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.primaryGreen,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            _buildProgressBar(context),
-            if (nutritionInfo != null) ...[
+            if (isExpanded) ...[
               const SizedBox(height: 16),
-              _buildNutritionInfo(context),
-            ],
-            if (recentMeals != null && recentMeals!.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 8),
-              Text(
-                'Recent Meals',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: AppTheme.secondaryGreen,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              _buildRecentMeals(context),
+              _buildNutritionInfo(),
+              if (record.foods.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _buildFoodsList(),
+              ],
+              if (record.notes?.isNotEmpty == true) ...[
+                const SizedBox(height: 16),
+                _buildNotes(),
+              ],
+              if (record.photos?.isNotEmpty == true) ...[
+                const SizedBox(height: 16),
+                _buildPhotos(),
+              ],
             ],
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildInfoColumn(
-    BuildContext context,
-    String label,
-    String value,
-    IconData icon,
-  ) {
-    return Column(
+  Widget _buildMealTypeIcon() {
+    IconData icon;
+    Color color;
+
+    switch (record.mealType.toLowerCase()) {
+      case 'breakfast':
+        icon = Icons.wb_sunny_outlined;
+        color = Colors.orange;
+        break;
+      case 'lunch':
+        icon = Icons.restaurant_outlined;
+        color = Colors.green;
+        break;
+      case 'dinner':
+        icon = Icons.nights_stay_outlined;
+        color = Colors.indigo;
+        break;
+      case 'snack':
+        icon = Icons.cookie_outlined;
+        color = Colors.brown;
+        break;
+      default:
+        icon = Icons.restaurant_outlined;
+        color = AppTheme.primaryColor;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        icon,
+        color: color,
+        size: 24,
+      ),
+    );
+  }
+
+  Widget _buildNutritionInfo() {
+    return Row(
       children: [
-        Icon(
-          icon,
-          color: AppTheme.neutralGrey,
-          size: 20,
+        _buildNutrientItem(
+          'Calories',
+          '${record.calories}',
+          'kcal',
+          Colors.orange,
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppTheme.neutralGrey,
-              ),
+        _buildNutrientItem(
+          'Protein',
+          '${record.protein}',
+          'g',
+          Colors.red,
         ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.primaryGreen,
-                fontWeight: FontWeight.w600,
-              ),
+        _buildNutrientItem(
+          'Carbs',
+          '${record.carbs}',
+          'g',
+          Colors.green,
+        ),
+        _buildNutrientItem(
+          'Fat',
+          '${record.fat}',
+          'g',
+          Colors.blue,
         ),
       ],
     );
   }
 
-  Widget _buildProgressBar(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildNutrientItem(
+    String label,
+    String value,
+    String unit,
+    Color color,
+  ) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
           children: [
             Text(
-              'Daily Progress',
-              style: Theme.of(context).textTheme.bodyMedium,
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: color,
+                fontWeight: FontWeight.w500,
+              ),
             ),
+            const SizedBox(height: 4),
             Text(
-              '${(progress * 100).toInt()}%',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.primaryGreen,
-                    fontWeight: FontWeight.w600,
-                  ),
+              '$value$unit',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimaryColor,
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildFoodsList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Foods',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor,
+          ),
+        ),
         const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: progress,
-            backgroundColor: AppTheme.lightBlue.withOpacity(0.2),
-            valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryGreen),
-            minHeight: 8,
+        ...record.foods.map((food) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Text(
+                    '• ${food.name}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.textPrimaryColor,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${food.portion} ${food.unit}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.textSecondaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            )),
+      ],
+    );
+  }
+
+  Widget _buildNotes() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Notes',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          record.notes!,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textSecondaryColor,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildNutritionInfo(BuildContext context) {
-    return Wrap(
-      spacing: 16,
-      runSpacing: 8,
-      children: nutritionInfo!.entries.map((entry) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppTheme.lightBlue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
+  Widget _buildPhotos() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Photos',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor,
           ),
-          child: Text(
-            '${entry.key}: ${entry.value}',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.primaryGreen,
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 80,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: record.photos!.length,
+            itemBuilder: (context, index) {
+              return Container(
+                width: 80,
+                height: 80,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  image: DecorationImage(
+                    image: NetworkImage(record.photos![index]),
+                    fit: BoxFit.cover,
+                  ),
                 ),
+              );
+            },
           ),
-        );
-      }).toList(),
+        ),
+      ],
     );
   }
-
-  Widget _buildRecentMeals(BuildContext context) {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: recentMeals!.length.clamp(0, 3),
-      itemBuilder: (context, index) {
-        final meal = recentMeals![index];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            children: [
-              Icon(
-                Icons.circle,
-                size: 8,
-                color: AppTheme.primaryGreen,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  meal.description,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-              Text(
-                meal.timeAgo,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.neutralGrey,
-                    ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class MealLog {
-  final String description;
-  final String timeAgo;
-  final DateTime timestamp;
-  final double amount;
-  final String? notes;
-
-  MealLog({
-    required this.description,
-    required this.timeAgo,
-    required this.timestamp,
-    required this.amount,
-    this.notes,
-  });
 }

@@ -1,237 +1,255 @@
-// lib/services/image_service.dart
-
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
-import '../theme/app_theme.dart';
+import 'core/base_service.dart';
+import '../utils/exceptions.dart';
 
-class ImageService {
+class ImageService extends BaseService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
-  final uuid = const Uuid();
-
-  // Singleton pattern
+  final _uuid = Uuid();
+  
   static final ImageService _instance = ImageService._internal();
   factory ImageService() => _instance;
   ImageService._internal();
 
-  // Pick image from gallery or camera
-  Future<File?> pickImage({
-    required ImageSource source,
+  // Image Upload Methods
+  Future<String> uploadProfileImage(String userId, File imageFile) async {
+    try {
+      await checkConnectivity();
+      
+      return await withRetry(() async {
+        final compressedFile = await _compressImage(imageFile);
+        final fileName = 'profile_${_uuid.v4()}${path.extension(imageFile.path)}';
+        final ref = _storage.ref().child('users/$userId/profile/$fileName');
+        
+        final metadata = SettableMetadata(
+          contentType: 'image/jpeg',
+          customMetadata: {'userId': userId},
+        );
+        
+        await ref.putFile(compressedFile, metadata);
+        final url = await ref.getDownloadURL();
+        
+        logger.i('Uploaded profile image: $fileName');
+        analytics.logEvent('profile_image_uploaded');
+        return url;
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error uploading profile image', e, stackTrace);
+      throw ImageServiceException('Error uploading profile image: $e');
+    }
+  }
+
+  Future<String> uploadPetImage(String userId, String petId, File imageFile) async {
+    try {
+      await checkConnectivity();
+      
+      return await withRetry(() async {
+        final compressedFile = await _compressImage(imageFile);
+        final fileName = 'pet_${_uuid.v4()}${path.extension(imageFile.path)}';
+        final ref = _storage.ref().child('users/$userId/pets/$petId/images/$fileName');
+        
+        final metadata = SettableMetadata(
+          contentType: 'image/jpeg',
+          customMetadata: {
+            'userId': userId,
+            'petId': petId,
+          },
+        );
+        
+        await ref.putFile(compressedFile, metadata);
+        final url = await ref.getDownloadURL();
+        
+        logger.i('Uploaded pet image: $fileName');
+        analytics.logEvent('pet_image_uploaded');
+        return url;
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error uploading pet image', e, stackTrace);
+      throw ImageServiceException('Error uploading pet image: $e');
+    }
+  }
+
+  Future<String> uploadMedicalImage(
+    String userId,
+    String petId,
+    File imageFile,
+    String category,
+  ) async {
+    try {
+      await checkConnectivity();
+      
+      return await withRetry(() async {
+        final compressedFile = await _compressImage(imageFile);
+        final fileName = 'medical_${_uuid.v4()}${path.extension(imageFile.path)}';
+        final ref = _storage.ref().child('users/$userId/pets/$petId/medical/$category/$fileName');
+        
+        final metadata = SettableMetadata(
+          contentType: 'image/jpeg',
+          customMetadata: {
+            'userId': userId,
+            'petId': petId,
+            'category': category,
+          },
+        );
+        
+        await ref.putFile(compressedFile, metadata);
+        final url = await ref.getDownloadURL();
+        
+        logger.i('Uploaded medical image: $fileName');
+        analytics.logEvent('medical_image_uploaded', parameters: {'category': category});
+        return url;
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error uploading medical image', e, stackTrace);
+      throw ImageServiceException('Error uploading medical image: $e');
+    }
+  }
+
+  // Image Picker Methods
+  Future<File?> pickImageFromGallery({
     double? maxWidth,
     double? maxHeight,
     int? quality,
   }) async {
     try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: source,
+      final pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
         maxWidth: maxWidth,
         maxHeight: maxHeight,
         imageQuality: quality,
       );
-
-      if (pickedFile == null) return null;
-
-      return File(pickedFile.path);
-    } catch (e) {
-      throw ImageServiceException('Error picking image: $e');
+      
+      if (pickedFile != null) {
+        analytics.logEvent('image_picked_gallery');
+        return File(pickedFile.path);
+      }
+      return null;
+    } catch (e, stackTrace) {
+      logger.e('Error picking image from gallery', e, stackTrace);
+      throw ImageServiceException('Error picking image from gallery: $e');
     }
   }
 
-  // Crop image
-  Future<File?> cropImage({
-    required File imageFile,
-    CropAspectRatio? aspectRatio,
-    List<CropAspectRatioPreset>? aspectRatioPresets,
+  Future<File?> pickImageFromCamera({
+    double? maxWidth,
+    double? maxHeight,
+    int? quality,
   }) async {
     try {
-      final croppedFile = await ImageCropper().cropImage(
-        sourcePath: imageFile.path,
-        aspectRatio: aspectRatio,
-        aspectRatioPresets: aspectRatioPresets ?? [
-          CropAspectRatioPreset.square,
-          CropAspectRatioPreset.ratio3x2,
-          CropAspectRatioPreset.original,
-          CropAspectRatioPreset.ratio4x3,
-          CropAspectRatioPreset.ratio16x9,
-        ],
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Crop Image',
-            toolbarColor: AppColors.primary,
-            toolbarWidgetColor: Colors.white,
-            initAspectRatio: CropAspectRatioPreset.original,
-            lockAspectRatio: false,
-          ),
-          IOSUiSettings(
-            title: 'Crop Image',
-            aspectRatioLockEnabled: false,
-          ),
-        ],
+      final pickedFile = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: maxWidth,
+        maxHeight: maxHeight,
+        imageQuality: quality,
       );
-
-      if (croppedFile == null) return null;
-
-      return File(croppedFile.path);
-    } catch (e) {
-      throw ImageServiceException('Error cropping image: $e');
+      
+      if (pickedFile != null) {
+        analytics.logEvent('image_picked_camera');
+        return File(pickedFile.path);
+      }
+      return null;
+    } catch (e, stackTrace) {
+      logger.e('Error picking image from camera', e, stackTrace);
+      throw ImageServiceException('Error picking image from camera: $e');
     }
   }
 
-  // Upload image to Firebase Storage
-  Future<String> uploadImage({
-    required File imageFile,
-    required String userId,
-    String? petId,
-    String? folder,
-  }) async {
-    try {
-      final String fileName = '${uuid.v4()}${path.extension(imageFile.path)}';
-      String storagePath = 'users/$userId';
-      
-      if (folder != null) {
-        storagePath += '/$folder';
-      }
-      if (petId != null) {
-        storagePath += '/pets/$petId';
-      }
-      
-      storagePath += '/$fileName';
-
-      final Reference ref = _storage.ref().child(storagePath);
-      final UploadTask uploadTask = ref.putFile(
-        imageFile,
-        SettableMetadata(
-          contentType: 'image/${path.extension(imageFile.path).substring(1)}',
-          customMetadata: {
-            'uploadedBy': userId,
-            'timestamp': DateTime.now().toIso8601String(),
-          },
-        ),
-      );
-
-      final TaskSnapshot snapshot = await uploadTask;
-      final String downloadUrl = await snapshot.ref.getDownloadURL();
-
-      return downloadUrl;
-    } catch (e) {
-      throw ImageServiceException('Error uploading image: $e');
-    }
-  }
-
-  // Delete image from Firebase Storage
+  // Image Management Methods
   Future<void> deleteImage(String imageUrl) async {
     try {
-      if (imageUrl.isEmpty) return;
+      await checkConnectivity();
       
-      final Reference ref = _storage.refFromURL(imageUrl);
-      await ref.delete();
-    } catch (e) {
+      await withRetry(() async {
+        final ref = _storage.refFromURL(imageUrl);
+        await ref.delete();
+        
+        logger.i('Deleted image: ${ref.name}');
+        analytics.logEvent('image_deleted');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error deleting image', e, stackTrace);
       throw ImageServiceException('Error deleting image: $e');
     }
   }
 
-  // Get image metadata
-  Future<Map<String, dynamic>> getImageMetadata(String imageUrl) async {
+  Future<List<String>> getPetImages(String userId, String petId) async {
     try {
-      final Reference ref = _storage.refFromURL(imageUrl);
-      final FullMetadata metadata = await ref.getMetadata();
-
-      return {
-        'name': metadata.name,
-        'size': metadata.size,
-        'contentType': metadata.contentType,
-        'timeCreated': metadata.timeCreated,
-        'updated': metadata.updated,
-        'customMetadata': metadata.customMetadata,
-      };
-    } catch (e) {
-      throw ImageServiceException('Error getting image metadata: $e');
-    }
-  }
-
-  // Update image metadata
-  Future<void> updateImageMetadata({
-    required String imageUrl,
-    required Map<String, String> metadata,
-  }) async {
-    try {
-      final Reference ref = _storage.refFromURL(imageUrl);
-      await ref.updateMetadata(
-        SettableMetadata(customMetadata: metadata),
+      await checkConnectivity();
+      
+      return await withCache(
+        key: 'pet_images_${userId}_$petId',
+        duration: const Duration(minutes: 30),
+        fetchData: () async {
+          final ref = _storage.ref().child('users/$userId/pets/$petId/images');
+          final result = await ref.listAll();
+          
+          final urls = await Future.wait(
+            result.items.map((item) => item.getDownloadURL()),
+          );
+          
+          return urls;
+        },
       );
-    } catch (e) {
-      throw ImageServiceException('Error updating image metadata: $e');
+    } catch (e, stackTrace) {
+      logger.e('Error getting pet images', e, stackTrace);
+      throw ImageServiceException('Error getting pet images: $e');
     }
   }
 
-  // Batch upload images
-  Future<List<String>> uploadMultipleImages({
-    required List<File> imageFiles,
-    required String userId,
-    String? petId,
-    String? folder,
-  }) async {
+  // Helper Methods
+  Future<File> _compressImage(File file) async {
     try {
-      final List<String> uploadedUrls = [];
-
-      for (final file in imageFiles) {
-        final url = await uploadImage(
-          imageFile: file,
-          userId: userId,
-          petId: petId,
-          folder: folder,
+      final bytes = await file.readAsBytes();
+      final image = img.decodeImage(bytes);
+      
+      if (image == null) throw ImageServiceException('Failed to decode image');
+      
+      // Resize if image is too large
+      var processedImage = image;
+      if (image.width > 1920 || image.height > 1920) {
+        processedImage = img.copyResize(
+          image,
+          width: image.width > image.height ? 1920 : null,
+          height: image.height >= image.width ? 1920 : null,
         );
-        uploadedUrls.add(url);
       }
-
-      return uploadedUrls;
-    } catch (e) {
-      throw ImageServiceException('Error uploading multiple images: $e');
-    }
-  }
-
-  // Get temporary download URL
-  Future<String> getTemporaryDownloadUrl(String imageUrl, {
-    Duration duration = const Duration(hours: 1),
-  }) async {
-    try {
-      final Reference ref = _storage.refFromURL(imageUrl);
-      return await ref.getDownloadURL();
-    } catch (e) {
-      throw ImageServiceException('Error getting temporary download URL: $e');
-    }
-  }
-
-  // Compress image before upload
-  Future<File> compressImage(File imageFile) async {
-    try {
-      // Implement image compression logic here
-      // You might want to use packages like flutter_image_compress
-      return imageFile;
-    } catch (e) {
+      
+      // Compress
+      final compressedBytes = img.encodeJpg(processedImage, quality: 85);
+      
+      // Save to temporary file
+      final tempDir = Directory.systemTemp;
+      final tempFile = File('${tempDir.path}/${_uuid.v4()}.jpg');
+      await tempFile.writeAsBytes(compressedBytes);
+      
+      return tempFile;
+    } catch (e, stackTrace) {
+      logger.e('Error compressing image', e, stackTrace);
       throw ImageServiceException('Error compressing image: $e');
     }
   }
 
-  // Generate thumbnail
-  Future<File?> generateThumbnail(File imageFile) async {
+  Future<Map<String, dynamic>> getImageMetadata(String imageUrl) async {
     try {
-      final XFile? thumbnail = await _picker.pickImage(
-        source: ImageSource.file,
-        maxWidth: 200,
-        maxHeight: 200,
-        imageQuality: 70,
-      );
-
-      if (thumbnail == null) return null;
-
-      return File(thumbnail.path);
-    } catch (e) {
-      throw ImageServiceException('Error generating thumbnail: $e');
+      final ref = _storage.refFromURL(imageUrl);
+      final metadata = await ref.getMetadata();
+      
+      return {
+        'name': metadata.name,
+        'size': metadata.size,
+        'contentType': metadata.contentType,
+        'created': metadata.timeCreated,
+        'updated': metadata.updated,
+        'customMetadata': metadata.customMetadata,
+      };
+    } catch (e, stackTrace) {
+      logger.e('Error getting image metadata', e, stackTrace);
+      throw ImageServiceException('Error getting image metadata: $e');
     }
   }
 }

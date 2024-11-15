@@ -1,330 +1,257 @@
 import 'package:flutter/material.dart';
+import '../models/wellness_data.dart';
 import '../theme/app_theme.dart';
 import 'common/custom_card.dart';
 
 class WellnessSummaryCard extends StatelessWidget {
-  final String petName;
-  final List<WellnessMetric> metrics;
-  final List<WellnessAlert>? alerts;
-  final DateTime? lastCheckup;
-  final VoidCallback? onAddRecord;
-  final Function(WellnessMetric)? onMetricTap;
-  final bool isLoading;
-  final String? veterinaryNotes;
-  final Map<String, double>? wellnessScores;
+  final WellnessData data;
+  final VoidCallback? onTap;
+  final bool showTrends;
+  final bool showIcons;
+  final EdgeInsets padding;
+  final double? width;
+  final double? height;
+  final bool isExpanded;
 
   const WellnessSummaryCard({
     Key? key,
-    required this.petName,
-    required this.metrics,
-    this.alerts,
-    this.lastCheckup,
-    this.onAddRecord,
-    this.onMetricTap,
-    this.isLoading = false,
-    this.veterinaryNotes,
-    this.wellnessScores,
+    required this.data,
+    this.onTap,
+    this.showTrends = true,
+    this.showIcons = true,
+    this.padding = const EdgeInsets.all(16),
+    this.width,
+    this.height,
+    this.isExpanded = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return CustomCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Wellness Summary',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: AppTheme.primaryGreen,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    petName,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.secondaryGreen,
-                        ),
-                  ),
-                ],
-              ),
-              if (onAddRecord != null)
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  color: AppTheme.primaryGreen,
-                  onPressed: isLoading ? null : onAddRecord,
-                ),
-            ],
-          ),
-          if (lastCheckup != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Last checkup: ${_formatDate(lastCheckup!)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.neutralGrey,
-                  ),
-            ),
-          ],
-          if (isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else ...[
-            if (alerts != null && alerts!.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildAlerts(context),
-            ],
-            const SizedBox(height: 16),
-            _buildMetricsGrid(context),
-            if (wellnessScores != null) ...[
-              const SizedBox(height: 16),
-              _buildWellnessScores(context),
-            ],
-            if (veterinaryNotes != null) ...[
-              const SizedBox(height: 16),
-              _buildVeterinaryNotes(context),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAlerts(BuildContext context) {
-    return Column(
-      children: alerts!.map((alert) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: (alert.isUrgent ? AppTheme.error : AppTheme.warning)
-                  .withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  alert.icon ?? (alert.isUrgent ? Icons.warning : Icons.info),
-                  color: alert.isUrgent ? AppTheme.error : AppTheme.warning,
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    alert.message,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: alert.isUrgent
-                              ? AppTheme.error
-                              : AppTheme.warning,
-                        ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildMetricsGrid(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.5,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: metrics.length,
-      itemBuilder: (context, index) {
-        return _buildMetricCard(context, metrics[index]);
-      },
-    );
-  }
-
-  Widget _buildMetricCard(BuildContext context, WellnessMetric metric) {
-    return InkWell(
-      onTap: onMetricTap != null ? () => onMetricTap!(metric) : null,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppTheme.lightBlue.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
+      onTap: onTap,
+      width: width,
+      height: height,
+      child: Padding(
+        padding: padding,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              metric.icon,
-              color: _getMetricColor(metric.status),
-              size: 24,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              metric.name,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: AppTheme.secondaryGreen,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              metric.value,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: _getMetricColor(metric.status),
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
+            _buildHeader(),
+            const SizedBox(height: 16),
+            _buildMetrics(),
+            if (isExpanded) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 16),
+              _buildDetails(),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildWellnessScores(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          'Wellness Scores',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: AppTheme.secondaryGreen,
-                fontWeight: FontWeight.w600,
-              ),
+        const Text(
+          'Wellness Summary',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor,
+          ),
         ),
-        const SizedBox(height: 8),
-        ...wellnessScores!.entries.map((entry) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      entry.key,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    Text(
-                      '${(entry.value * 100).round()}%',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                LinearProgressIndicator(
-                  value: entry.value,
-                  backgroundColor: AppTheme.neutralGrey.withOpacity(0.2),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    _getScoreColor(entry.value),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
+        _buildOverallScore(),
       ],
     );
   }
 
-  Widget _buildVeterinaryNotes(BuildContext context) {
+  Widget _buildOverallScore() {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.lightBlue.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 6,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      decoration: BoxDecoration(
+        color: _getScoreColor(data.overallScore).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Veterinary Notes',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppTheme.secondaryGreen,
-                  fontWeight: FontWeight.w600,
-                ),
+          Icon(
+            _getScoreIcon(data.overallScore),
+            size: 16,
+            color: _getScoreColor(data.overallScore),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(width: 4),
           Text(
-            veterinaryNotes!,
-            style: Theme.of(context).textTheme.bodyMedium,
+            '${data.overallScore}/10',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: _getScoreColor(data.overallScore),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Color _getMetricColor(WellnessStatus status) {
-    switch (status) {
-      case WellnessStatus.good:
-        return AppTheme.success;
-      case WellnessStatus.warning:
-        return AppTheme.warning;
-      case WellnessStatus.critical:
-        return AppTheme.error;
-      default:
-        return AppTheme.neutralGrey;
+  Widget _buildMetrics() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        _buildMetricItem(
+          'Activity',
+          data.activityScore,
+          Icons.directions_run,
+          data.activityTrend,
+        ),
+        _buildMetricItem(
+          'Appetite',
+          data.appetiteScore,
+          Icons.restaurant,
+          data.appetiteTrend,
+        ),
+        _buildMetricItem(
+          'Sleep',
+          data.sleepScore,
+          Icons.bedtime,
+          data.sleepTrend,
+        ),
+        _buildMetricItem(
+          'Mood',
+          data.moodScore,
+          Icons.mood,
+          data.moodTrend,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMetricItem(
+    String label,
+    int score,
+    IconData icon,
+    TrendDirection trend,
+  ) {
+    return Column(
+      children: [
+        if (showIcons)
+          Icon(
+            icon,
+            color: _getScoreColor(score),
+            size: 24,
+          ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppTheme.textSecondaryColor,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$score',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: _getScoreColor(score),
+              ),
+            ),
+            if (showTrends) ...[
+              const SizedBox(width: 4),
+              _buildTrendIndicator(trend),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrendIndicator(TrendDirection trend) {
+    IconData icon;
+    Color color;
+
+    switch (trend) {
+      case TrendDirection.up:
+        icon = Icons.arrow_upward;
+        color = Colors.green;
+        break;
+      case TrendDirection.down:
+        icon = Icons.arrow_downward;
+        color = Colors.red;
+        break;
+      case TrendDirection.stable:
+        icon = Icons.arrow_forward;
+        color = Colors.orange;
+        break;
     }
+
+    return Icon(
+      icon,
+      size: 12,
+      color: color,
+    );
   }
 
-  Color _getScoreColor(double score) {
-    if (score >= 0.8) return AppTheme.success;
-    if (score >= 0.6) return AppTheme.warning;
-    return AppTheme.error;
+  Widget _buildDetails() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildDetailItem('Notes', data.notes),
+        if (data.concerns.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildDetailItem('Concerns', data.concerns),
+        ],
+        if (data.recommendations.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildDetailItem('Recommendations', data.recommendations),
+        ],
+      ],
+    );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
+  Widget _buildDetailItem(String label, String content) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          content,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textSecondaryColor,
+          ),
+        ),
+      ],
+    );
   }
-}
 
-class WellnessMetric {
-  final String name;
-  final String value;
-  final IconData icon;
-  final WellnessStatus status;
-  final String? notes;
+  Color _getScoreColor(int score) {
+    if (score >= 8) return Colors.green;
+    if (score >= 6) return Colors.orange;
+    return Colors.red;
+  }
 
-  const WellnessMetric({
-    required this.name,
-    required this.value,
-    required this.icon,
-    required this.status,
-    this.notes,
-  });
-}
-
-class WellnessAlert {
-  final String message;
-  final bool isUrgent;
-  final IconData? icon;
-  final DateTime timestamp;
-
-  const WellnessAlert({
-    required this.message,
-    this.isUrgent = false,
-    this.icon,
-    required this.timestamp,
-  });
-}
-
-enum WellnessStatus {
-  good,
-  warning,
-  critical,
-  unknown,
+  IconData _getScoreIcon(int score) {
+    if (score >= 8) return Icons.sentiment_very_satisfied;
+    if (score >= 6) return Icons.sentiment_satisfied;
+    return Icons.sentiment_dissatisfied;
+  }
 }

@@ -1,6 +1,5 @@
-// lib/models/care_team_member.dart
-
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CareTeamMember {
   final String id;
@@ -18,6 +17,13 @@ class CareTeamMember {
   final String? specialization;
   final Map<String, dynamic>? availability;
   final String? notes;
+  final String? createdBy;
+  final bool isPremium;
+  final Map<String, dynamic>? metadata;
+  final List<String>? certifications;
+  final Map<String, dynamic>? schedule;
+  final List<String>? preferredContactMethods;
+  final Map<String, dynamic>? notificationPreferences;
 
   CareTeamMember({
     required this.id,
@@ -35,43 +41,14 @@ class CareTeamMember {
     this.specialization,
     this.availability,
     this.notes,
+    this.createdBy,
+    this.isPremium = false,
+    this.metadata,
+    this.certifications,
+    this.schedule,
+    this.preferredContactMethods,
+    this.notificationPreferences,
   });
-
-  CareTeamMember copyWith({
-    String? id,
-    String? petId,
-    String? name,
-    String? role,
-    List<String>? permissions,
-    String? email,
-    String? phone,
-    bool? isActive,
-    DateTime? dateAdded,
-    DateTime? lastAccess,
-    Map<String, bool>? accessLevels,
-    String? profileImage,
-    String? specialization,
-    Map<String, dynamic>? availability,
-    String? notes,
-  }) {
-    return CareTeamMember(
-      id: id ?? this.id,
-      petId: petId ?? this.petId,
-      name: name ?? this.name,
-      role: role ?? this.role,
-      permissions: permissions ?? this.permissions,
-      email: email ?? this.email,
-      phone: phone ?? this.phone,
-      isActive: isActive ?? this.isActive,
-      dateAdded: dateAdded ?? this.dateAdded,
-      lastAccess: lastAccess ?? this.lastAccess,
-      accessLevels: accessLevels ?? this.accessLevels,
-      profileImage: profileImage ?? this.profileImage,
-      specialization: specialization ?? this.specialization,
-      availability: availability ?? this.availability,
-      notes: notes ?? this.notes,
-    );
-  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -90,6 +67,13 @@ class CareTeamMember {
       'specialization': specialization,
       'availability': availability,
       'notes': notes,
+      'createdBy': createdBy,
+      'isPremium': isPremium,
+      'metadata': metadata,
+      'certifications': certifications,
+      'schedule': schedule,
+      'preferredContactMethods': preferredContactMethods,
+      'notificationPreferences': notificationPreferences,
     };
   }
 
@@ -105,49 +89,37 @@ class CareTeamMember {
       isActive: json['isActive'] ?? true,
       dateAdded: DateTime.parse(json['dateAdded']),
       lastAccess: json['lastAccess'] != null 
-          ? DateTime.parse(json['lastAccess']) 
+          ? DateTime.parse(json['lastAccess'])
           : null,
       accessLevels: Map<String, bool>.from(json['accessLevels'] ?? {}),
       profileImage: json['profileImage'],
       specialization: json['specialization'],
       availability: json['availability'],
       notes: json['notes'],
+      createdBy: json['createdBy'],
+      isPremium: json['isPremium'] ?? false,
+      metadata: json['metadata'],
+      certifications: json['certifications'] != null 
+          ? List<String>.from(json['certifications'])
+          : null,
+      schedule: json['schedule'],
+      preferredContactMethods: json['preferredContactMethods'] != null 
+          ? List<String>.from(json['preferredContactMethods'])
+          : null,
+      notificationPreferences: json['notificationPreferences'],
     );
   }
 
-  // Helper methods
-  bool hasPermission(String permission) {
-    return permissions.contains(permission);
-  }
-
-  bool hasAccess(String feature) {
-    return accessLevels[feature] ?? false;
-  }
-
-  String getFormattedRole() {
-    return CareTeamRole.values
-        .firstWhere(
-          (role) => role.toString().split('.').last == this.role.toLowerCase(),
-          orElse: () => CareTeamRole.other,
-        )
-        .displayName;
-  }
-
-  bool isVeterinary() {
-    return role.toLowerCase().contains('vet') ||
-           specialization?.toLowerCase().contains('vet') == true;
-  }
-
-  bool isPrimaryCaregiver() {
-    return role.toLowerCase() == 'primary caregiver';
-  }
-
+  bool hasPermission(String permission) => permissions.contains(permission);
+  bool hasAccess(String feature) => accessLevels[feature] ?? false;
+  bool canEdit(String userId) => createdBy == userId || !isPremium;
+  
   String getInitials() {
     final nameParts = name.split(' ');
     if (nameParts.length > 1) {
       return '${nameParts.first[0]}${nameParts.last[0]}'.toUpperCase();
     }
-    return name.substring(0, min(2, name.length)).toUpperCase();
+    return name.substring(0, name.length.clamp(0, 2)).toUpperCase();
   }
 }
 
@@ -166,59 +138,15 @@ enum CareTeamRole {
 extension CareTeamRoleExtension on CareTeamRole {
   String get displayName {
     switch (this) {
-      case CareTeamRole.primaryCaregiver:
-        return 'Primary Caregiver';
-      case CareTeamRole.veterinarian:
-        return 'Veterinarian';
-      case CareTeamRole.trainer:
-        return 'Trainer';
-      case CareTeamRole.groomer:
-        return 'Groomer';
-      case CareTeamRole.walker:
-        return 'Walker';
-      case CareTeamRole.sitter:
-        return 'Pet Sitter';
-      case CareTeamRole.familyMember:
-        return 'Family Member';
-      case CareTeamRole.specialist:
-        return 'Specialist';
-      case CareTeamRole.other:
-        return 'Other';
+      case CareTeamRole.primaryCaregiver: return 'Primary Caregiver';
+      case CareTeamRole.veterinarian: return 'Veterinarian';
+      case CareTeamRole.trainer: return 'Trainer';
+      case CareTeamRole.groomer: return 'Groomer';
+      case CareTeamRole.walker: return 'Walker';
+      case CareTeamRole.sitter: return 'Pet Sitter';
+      case CareTeamRole.familyMember: return 'Family Member';
+      case CareTeamRole.specialist: return 'Specialist';
+      case CareTeamRole.other: return 'Other';
     }
   }
-
-  String get icon {
-    switch (this) {
-      case CareTeamRole.primaryCaregiver:
-        return '👤';
-      case CareTeamRole.veterinarian:
-        return '👨‍⚕️';
-      case CareTeamRole.trainer:
-        return '🏋️';
-      case CareTeamRole.groomer:
-        return '✂️';
-      case CareTeamRole.walker:
-        return '🚶';
-      case CareTeamRole.sitter:
-        return '🏠';
-      case CareTeamRole.familyMember:
-        return '👨‍👩‍👧‍👦';
-      case CareTeamRole.specialist:
-        return '👨‍🔬';
-      case CareTeamRole.other:
-        return '❓';
-    }
-  }
-}
-
-// Common permission types
-class CareTeamPermission {
-  static const String viewHealth = 'view_health';
-  static const String editHealth = 'edit_health';
-  static const String viewDocuments = 'view_documents';
-  static const String editDocuments = 'edit_documents';
-  static const String scheduleAppointments = 'schedule_appointments';
-  static const String manageTeam = 'manage_team';
-  static const String viewAnalytics = 'view_analytics';
-  static const String adminAccess = 'admin_access';
 }

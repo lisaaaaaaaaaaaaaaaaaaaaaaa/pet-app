@@ -1,125 +1,119 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import '../theme/app_theme.dart';
 
 class PawPrintBackground extends StatelessWidget {
-  final Widget child;
   final Color? color;
-  final double opacity;
-  final bool animate;
   final int pawCount;
-  final double pawSize;
-  final bool randomize;
-  final bool isReversed;
+  final double minSize;
+  final double maxSize;
+  final double opacity;
+  final bool randomRotation;
+  final bool animate;
+  final Duration animationDuration;
 
   const PawPrintBackground({
     Key? key,
-    required this.child,
     this.color,
-    this.opacity = 0.05,
-    this.animate = false,
     this.pawCount = 20,
-    this.pawSize = 24,
-    this.randomize = true,
-    this.isReversed = false,
+    this.minSize = 24,
+    this.maxSize = 48,
+    this.opacity = 0.1,
+    this.randomRotation = true,
+    this.animate = true,
+    this.animationDuration = const Duration(seconds: 20),
   }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        if (animate)
-          _AnimatedPawPrints(
-            color: color ?? AppTheme.primaryGreen,
-            opacity: opacity,
-            pawCount: pawCount,
-            pawSize: pawSize,
-            randomize: randomize,
-            isReversed: isReversed,
-          )
-        else
-          _StaticPawPrints(
-            color: color ?? AppTheme.primaryGreen,
-            opacity: opacity,
-            pawCount: pawCount,
-            pawSize: pawSize,
-            randomize: randomize,
-            isReversed: isReversed,
-          ),
-        child,
-      ],
-    );
-  }
-}
-
-class _StaticPawPrints extends StatelessWidget {
-  final Color color;
-  final double opacity;
-  final int pawCount;
-  final double pawSize;
-  final bool randomize;
-  final bool isReversed;
-
-  const _StaticPawPrints({
-    required this.color,
-    required this.opacity,
-    required this.pawCount,
-    required this.pawSize,
-    required this.randomize,
-    required this.isReversed,
-  });
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return CustomPaint(
-          size: Size(constraints.maxWidth, constraints.maxHeight),
-          painter: PawPrintPainter(
-            color: color,
-            opacity: opacity,
-            pawCount: pawCount,
-            pawSize: pawSize,
-            randomize: randomize,
-            isReversed: isReversed,
+        return Stack(
+          children: List.generate(
+            pawCount,
+            (index) => _PawPrint(
+              left: _randomPosition(constraints.maxWidth),
+              top: _randomPosition(constraints.maxHeight),
+              size: _randomSize(),
+              color: color ?? AppTheme.primaryColor,
+              opacity: opacity,
+              rotation: randomRotation ? _randomRotation() : 0,
+              animate: animate,
+              animationDuration: animationDuration,
+            ),
           ),
         );
       },
     );
   }
+
+  double _randomPosition(double max) {
+    return math.Random().nextDouble() * max;
+  }
+
+  double _randomSize() {
+    return minSize + math.Random().nextDouble() * (maxSize - minSize);
+  }
+
+  double _randomRotation() {
+    return math.Random().nextDouble() * 2 * math.pi;
+  }
 }
 
-class _AnimatedPawPrints extends StatefulWidget {
+class _PawPrint extends StatefulWidget {
+  final double left;
+  final double top;
+  final double size;
   final Color color;
   final double opacity;
-  final int pawCount;
-  final double pawSize;
-  final bool randomize;
-  final bool isReversed;
+  final double rotation;
+  final bool animate;
+  final Duration animationDuration;
 
-  const _AnimatedPawPrints({
+  const _PawPrint({
+    Key? key,
+    required this.left,
+    required this.top,
+    required this.size,
     required this.color,
     required this.opacity,
-    required this.pawCount,
-    required this.pawSize,
-    required this.randomize,
-    required this.isReversed,
-  });
+    required this.rotation,
+    required this.animate,
+    required this.animationDuration,
+  }) : super(key: key);
 
   @override
-  State<_AnimatedPawPrints> createState() => _AnimatedPawPrintsState();
+  State<_PawPrint> createState() => _PawPrintState();
 }
 
-class _AnimatedPawPrintsState extends State<_AnimatedPawPrints>
+class _PawPrintState extends State<_PawPrint>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  late Animation<double> _opacityAnimation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
+      duration: widget.animationDuration,
       vsync: this,
-      duration: const Duration(seconds: 10),
-    )..repeat();
+    );
+
+    _opacityAnimation = Tween<double>(
+      begin: 0.0,
+      end: widget.opacity,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    if (widget.animate) {
+      _controller.repeat(reverse: true);
+    } else {
+      _controller.value = 1.0;
+    }
   }
 
   @override
@@ -130,119 +124,67 @@ class _AnimatedPawPrintsState extends State<_AnimatedPawPrints>
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            return CustomPaint(
-              size: Size(constraints.maxWidth, constraints.maxHeight),
-              painter: PawPrintPainter(
-                color: widget.color,
-                opacity: widget.opacity,
-                pawCount: widget.pawCount,
-                pawSize: widget.pawSize,
-                randomize: widget.randomize,
-                isReversed: widget.isReversed,
-                animation: _controller.value,
-              ),
-            );
-          },
-        );
-      },
+    return Positioned(
+      left: widget.left,
+      top: widget.top,
+      child: Transform.rotate(
+        angle: widget.rotation,
+        child: AnimatedBuilder(
+          animation: _opacityAnimation,
+          builder: (context, child) => CustomPaint(
+            size: Size(widget.size, widget.size),
+            painter: _PawPrintPainter(
+              color: widget.color.withOpacity(_opacityAnimation.value),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
-class PawPrintPainter extends CustomPainter {
+class _PawPrintPainter extends CustomPainter {
   final Color color;
-  final double opacity;
-  final int pawCount;
-  final double pawSize;
-  final bool randomize;
-  final bool isReversed;
-  final double? animation;
-  final Random _random = Random();
 
-  PawPrintPainter({
-    required this.color,
-    required this.opacity,
-    required this.pawCount,
-    required this.pawSize,
-    required this.randomize,
-    required this.isReversed,
-    this.animation,
-  });
+  _PawPrintPainter({required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color.withOpacity(opacity)
+      ..color = color
       ..style = PaintingStyle.fill;
 
-    for (var i = 0; i < pawCount; i++) {
-      double x, y;
-      if (randomize) {
-        x = _random.nextDouble() * size.width;
-        y = _random.nextDouble() * size.height;
-      } else {
-        x = (i % 5) * (size.width / 4);
-        y = (i ~/ 5) * (size.height / 4);
-      }
+    final center = Offset(size.width / 2, size.height / 2);
+    final padSize = size.width * 0.3;
+    final toeSize = size.width * 0.2;
 
-      if (animation != null) {
-        y += size.height * animation! * (isReversed ? -1 : 1);
-        y = y % size.height;
-      }
-
-      _drawPawPrint(canvas, paint, x, y);
-    }
-  }
-
-  void _drawPawPrint(Canvas canvas, Paint paint, double x, double y) {
     // Main pad
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(x, y),
-        width: pawSize,
-        height: pawSize * 1.2,
+        center: center,
+        width: padSize * 1.5,
+        height: padSize,
       ),
       paint,
     );
 
     // Toe pads
-    final double toeSize = pawSize * 0.4;
-    final double spacing = pawSize * 0.3;
+    final toeOffsets = [
+      Offset(-toeSize, -toeSize * 1.5), // Top left
+      Offset(toeSize, -toeSize * 1.5), // Top right
+      Offset(-toeSize * 1.2, -toeSize * 0.5), // Middle left
+      Offset(toeSize * 1.2, -toeSize * 0.5), // Middle right
+    ];
 
-    // Left toes
-    canvas.drawCircle(
-      Offset(x - spacing, y - spacing),
-      toeSize,
-      paint,
-    );
-    canvas.drawCircle(
-      Offset(x + spacing, y - spacing),
-      toeSize,
-      paint,
-    );
-
-    // Right toes
-    canvas.drawCircle(
-      Offset(x - spacing * 0.7, y - spacing * 2),
-      toeSize,
-      paint,
-    );
-    canvas.drawCircle(
-      Offset(x + spacing * 0.7, y - spacing * 2),
-      toeSize,
-      paint,
-    );
+    for (final offset in toeOffsets) {
+      canvas.drawCircle(
+        center + offset,
+        toeSize / 2,
+        paint,
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(covariant PawPrintPainter oldDelegate) {
-    return oldDelegate.animation != animation ||
-        oldDelegate.color != color ||
-        oldDelegate.opacity != opacity;
-  }
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

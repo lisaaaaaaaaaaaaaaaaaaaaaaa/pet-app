@@ -1,312 +1,329 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:uuid/uuid.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'core/base_service.dart';
+import '../models/medical_record.dart';
+import '../models/vaccination.dart';
+import '../models/prescription.dart';
+import '../models/medical_condition.dart';
+import '../models/allergy.dart';
+import '../utils/exceptions.dart';
 
-class MedicalRecordService {
+class MedicalRecordService extends BaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final uuid = const Uuid();
-
-  // Singleton pattern
+  
   static final MedicalRecordService _instance = MedicalRecordService._internal();
   factory MedicalRecordService() => _instance;
   MedicalRecordService._internal();
 
-  // Create a new medical record
-  Future<String> createMedicalRecord({
-    required String petId,
-    required String userId,
-    required String recordType,
-    required DateTime date,
-    required String veterinarianName,
-    required String clinicName,
-    String? diagnosis,
-    String? treatment,
-    String? prescription,
-    String? notes,
-    List<String>? attachments,
-    double? cost,
-  }) async {
+  // Collection References
+  CollectionReference get _usersRef => _firestore.collection('users');
+  CollectionReference _petMedicalRef(String userId, String petId) =>
+      _usersRef.doc(userId).collection('pets').doc(petId).collection('medical');
+
+  // Medical Records
+  Future<void> addMedicalRecord(String userId, String petId, MedicalRecord record) async {
     try {
-      final String recordId = uuid.v4();
-      final documentRef = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medicalRecords')
-          .doc(recordId);
-
-      final recordData = {
-        'id': recordId,
-        'petId': petId,
-        'userId': userId,
-        'recordType': recordType,
-        'date': Timestamp.fromDate(date),
-        'veterinarianName': veterinarianName,
-        'clinicName': clinicName,
-        'diagnosis': diagnosis,
-        'treatment': treatment,
-        'prescription': prescription,
-        'notes': notes,
-        'attachments': attachments ?? [],
-        'cost': cost,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      await documentRef.set(recordData);
-      return recordId;
-    } catch (e) {
-      throw MedicalRecordException('Error creating medical record: $e');
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petMedicalRef(userId, petId)
+            .doc('records')
+            .collection('visits')
+            .doc(record.id)
+            .set(record.toJson());
+            
+        await _updateLatestVisit(userId, petId, record);
+        logger.i('Added medical record: ${record.id}');
+        analytics.logEvent('medical_record_added');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error adding medical record', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicalRecordException('Error adding medical record: $e');
     }
   }
 
-  // Update an existing medical record
-  Future<void> updateMedicalRecord({
-    required String recordId,
-    required String petId,
-    String? recordType,
-    DateTime? date,
-    String? veterinarianName,
-    String? clinicName,
-    String? diagnosis,
-    String? treatment,
-    String? prescription,
-    String? notes,
-    List<String>? attachments,
-    double? cost,
-  }) async {
-    try {
-      final documentRef = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medicalRecords')
-          .doc(recordId);
-
-      final Map<String, dynamic> updateData = {};
-
-      if (recordType != null) updateData['recordType'] = recordType;
-      if (date != null) updateData['date'] = Timestamp.fromDate(date);
-      if (veterinarianName != null) updateData['veterinarianName'] = veterinarianName;
-      if (clinicName != null) updateData['clinicName'] = clinicName;
-      if (diagnosis != null) updateData['diagnosis'] = diagnosis;
-      if (treatment != null) updateData['treatment'] = treatment;
-      if (prescription != null) updateData['prescription'] = prescription;
-      if (notes != null) updateData['notes'] = notes;
-      if (attachments != null) updateData['attachments'] = attachments;
-      if (cost != null) updateData['cost'] = cost;
-
-      updateData['updatedAt'] = FieldValue.serverTimestamp();
-
-      await documentRef.update(updateData);
-    } catch (e) {
-      throw MedicalRecordException('Error updating medical record: $e');
-    }
-  }
-
-  // Get a single medical record
-  Future<Map<String, dynamic>> getMedicalRecord({
-    required String petId,
-    required String recordId,
-  }) async {
-    try {
-      final documentRef = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medicalRecords')
-          .doc(recordId);
-
-      final snapshot = await documentRef.get();
-
-      if (!snapshot.exists) {
-        throw MedicalRecordException('Medical record not found');
-      }
-
-      return snapshot.data() as Map<String, dynamic>;
-    } catch (e) {
-      throw MedicalRecordException('Error fetching medical record: $e');
-    }
-  }
-
-  // Get all medical records for a pet
-  Future<List<Map<String, dynamic>>> getAllMedicalRecords({
-    required String petId,
-    String? recordType,
+  Future<List<MedicalRecord>> getMedicalHistory(
+    String userId,
+    String petId, {
     DateTime? startDate,
     DateTime? endDate,
+    String? type,
     int? limit,
-    String? lastRecordId,
   }) async {
     try {
-      Query query = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medicalRecords')
-          .orderBy('date', descending: true);
+      await checkConnectivity();
+      
+      return await withCache(
+        key: 'medical_history_${userId}_$petId',
+        duration: const Duration(hours: 1),
+        fetchData: () async {
+          var query = _petMedicalRef(userId, petId)
+              .doc('records')
+              .collection('visits')
+              .orderBy('date', descending: true);
 
-      if (recordType != null) {
-        query = query.where('recordType', isEqualTo: recordType);
-      }
+          if (startDate != null) {
+            query = query.where('date',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
+          }
 
-      if (startDate != null) {
-        query = query.where('date',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
-      }
+          if (endDate != null) {
+            query = query.where('date',
+                isLessThanOrEqualTo: Timestamp.fromDate(endDate));
+          }
 
-      if (endDate != null) {
-        query = query.where('date',
-            isLessThanOrEqualTo: Timestamp.fromDate(endDate));
-      }
+          if (type != null) {
+            query = query.where('type', isEqualTo: type);
+          }
 
-      if (lastRecordId != null) {
-        final lastDoc = await _firestore
-            .collection('pets')
-            .doc(petId)
-            .collection('medicalRecords')
-            .doc(lastRecordId)
-            .get();
-        query = query.startAfterDocument(lastDoc);
-      }
+          if (limit != null) {
+            query = query.limit(limit);
+          }
 
-      if (limit != null) {
-        query = query.limit(limit);
-      }
-
-      final querySnapshot = await query.get();
-      return querySnapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
-          .toList();
-    } catch (e) {
-      throw MedicalRecordException('Error fetching medical records: $e');
+          final snapshot = await query.get();
+          return snapshot.docs
+              .map((doc) => MedicalRecord.fromJson(doc.data()))
+              .toList();
+        },
+      );
+    } catch (e, stackTrace) {
+      logger.e('Error getting medical history', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicalRecordException('Error getting medical history: $e');
     }
   }
 
-  // Delete a medical record
-  Future<void> deleteMedicalRecord({
-    required String petId,
-    required String recordId,
-  }) async {
+  // Vaccinations
+  Future<void> addVaccination(String userId, String petId, Vaccination vaccination) async {
     try {
-      await _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medicalRecords')
-          .doc(recordId)
-          .delete();
-    } catch (e) {
-      throw MedicalRecordException('Error deleting medical record: $e');
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petMedicalRef(userId, petId)
+            .doc('vaccinations')
+            .collection('records')
+            .doc(vaccination.id)
+            .set(vaccination.toJson());
+            
+        await _updateVaccinationStatus(userId, petId);
+        logger.i('Added vaccination: ${vaccination.id}');
+        analytics.logEvent('vaccination_added');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error adding vaccination', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicalRecordException('Error adding vaccination: $e');
     }
   }
 
-  // Get medical record statistics
-  Future<Map<String, dynamic>> getMedicalRecordStats({
-    required String petId,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) async {
+  Stream<List<Vaccination>> streamVaccinations(String userId, String petId) {
     try {
-      Query query = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medicalRecords');
+      return _petMedicalRef(userId, petId)
+          .doc('vaccinations')
+          .collection('records')
+          .orderBy('date', descending: true)
+          .snapshots()
+          .map((snapshot) => snapshot.docs
+              .map((doc) => Vaccination.fromJson(doc.data()))
+              .toList());
+    } catch (e, stackTrace) {
+      logger.e('Error streaming vaccinations', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicalRecordException('Error streaming vaccinations: $e');
+    }
+  }
 
-      if (startDate != null) {
-        query = query.where('date',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
-      }
+  // Prescriptions
+  Future<void> addPrescription(String userId, String petId, Prescription prescription) async {
+    try {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petMedicalRef(userId, petId)
+            .doc('prescriptions')
+            .collection('active')
+            .doc(prescription.id)
+            .set(prescription.toJson());
+            
+        logger.i('Added prescription: ${prescription.id}');
+        analytics.logEvent('prescription_added');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error adding prescription', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicalRecordException('Error adding prescription: $e');
+    }
+  }
 
-      if (endDate != null) {
-        query = query.where('date',
-            isLessThanOrEqualTo: Timestamp.fromDate(endDate));
-      }
+  Future<List<Prescription>> getActivePrescriptions(String userId, String petId) async {
+    try {
+      await checkConnectivity();
+      
+      return await withCache(
+        key: 'active_prescriptions_${userId}_$petId',
+        duration: const Duration(minutes: 30),
+        fetchData: () async {
+          final snapshot = await _petMedicalRef(userId, petId)
+              .doc('prescriptions')
+              .collection('active')
+              .where('endDate', isGreaterThan: Timestamp.fromDate(DateTime.now()))
+              .get();
+              
+          return snapshot.docs
+              .map((doc) => Prescription.fromJson(doc.data()))
+              .toList();
+        },
+      );
+    } catch (e, stackTrace) {
+      logger.e('Error getting active prescriptions', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicalRecordException('Error getting active prescriptions: $e');
+    }
+  }
 
-      final querySnapshot = await query.get();
-      final records = querySnapshot.docs;
+  // Medical Conditions
+  Future<void> addMedicalCondition(
+    String userId,
+    String petId,
+    MedicalCondition condition,
+  ) async {
+    try {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petMedicalRef(userId, petId)
+            .doc('conditions')
+            .collection('active')
+            .doc(condition.id)
+            .set(condition.toJson());
+            
+        logger.i('Added medical condition: ${condition.id}');
+        analytics.logEvent('medical_condition_added');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error adding medical condition', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicalRecordException('Error adding medical condition: $e');
+    }
+  }
 
-      double totalCost = 0;
-      Map<String, int> recordTypeCount = {};
-      Map<String, int> clinicVisits = {};
+  Stream<List<MedicalCondition>> streamMedicalConditions(String userId, String petId) {
+    try {
+      return _petMedicalRef(userId, petId)
+          .doc('conditions')
+          .collection('active')
+          .snapshots()
+          .map((snapshot) => snapshot.docs
+              .map((doc) => MedicalCondition.fromJson(doc.data()))
+              .toList());
+    } catch (e, stackTrace) {
+      logger.e('Error streaming medical conditions', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicalRecordException('Error streaming medical conditions: $e');
+    }
+  }
 
-      for (var record in records) {
-        final data = record.data() as Map<String, dynamic>;
-        
-        // Calculate total cost
-        if (data['cost'] != null) {
-          totalCost += (data['cost'] as num).toDouble();
+  // Allergies
+  Future<void> addAllergy(String userId, String petId, Allergy allergy) async {
+    try {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petMedicalRef(userId, petId)
+            .doc('allergies')
+            .collection('list')
+            .doc(allergy.id)
+            .set(allergy.toJson());
+            
+        logger.i('Added allergy: ${allergy.id}');
+        analytics.logEvent('allergy_added');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error adding allergy', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicalRecordException('Error adding allergy: $e');
+    }
+  }
+
+  Future<List<Allergy>> getAllergies(String userId, String petId) async {
+    try {
+      await checkConnectivity();
+      
+      return await withCache(
+        key: 'allergies_${userId}_$petId',
+        duration: const Duration(hours: 2),
+        fetchData: () async {
+          final snapshot = await _petMedicalRef(userId, petId)
+              .doc('allergies')
+              .collection('list')
+              .get();
+              
+          return snapshot.docs
+              .map((doc) => Allergy.fromJson(doc.data()))
+              .toList();
+        },
+      );
+    } catch (e, stackTrace) {
+      logger.e('Error getting allergies', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicalRecordException('Error getting allergies: $e');
+    }
+  }
+
+  // Helper Methods
+  Future<void> _updateLatestVisit(
+    String userId,
+    String petId,
+    MedicalRecord record,
+  ) async {
+    try {
+      await _petMedicalRef(userId, petId).doc('summary').set({
+        'lastVisit': record.date,
+        'lastVisitType': record.type,
+        'lastClinic': record.clinicName,
+        'lastVeterinarian': record.veterinarianName,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      logger.e('Error updating latest visit', e);
+    }
+  }
+
+  Future<void> _updateVaccinationStatus(String userId, String petId) async {
+    try {
+      final vaccinations = await _petMedicalRef(userId, petId)
+          .doc('vaccinations')
+          .collection('records')
+          .orderBy('date', descending: true)
+          .get();
+
+      final Map<String, DateTime> latestVaccinations = {};
+      for (var doc in vaccinations.docs) {
+        final vaccination = Vaccination.fromJson(doc.data());
+        if (!latestVaccinations.containsKey(vaccination.type)) {
+          latestVaccinations[vaccination.type] = vaccination.date;
         }
-
-        // Count record types
-        final recordType = data['recordType'] as String;
-        recordTypeCount[recordType] = (recordTypeCount[recordType] ?? 0) + 1;
-
-        // Count clinic visits
-        final clinicName = data['clinicName'] as String;
-        clinicVisits[clinicName] = (clinicVisits[clinicName] ?? 0) + 1;
       }
 
-      return {
-        'totalRecords': records.length,
-        'totalCost': totalCost,
-        'recordTypeCount': recordTypeCount,
-        'clinicVisits': clinicVisits,
-        'startDate': startDate,
-        'endDate': endDate,
-      };
+      await _petMedicalRef(userId, petId).doc('summary').set({
+        'vaccinationStatus': latestVaccinations,
+        'lastVaccinationUpdate': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     } catch (e) {
-      throw MedicalRecordException('Error getting medical record statistics: $e');
+      logger.e('Error updating vaccination status', e);
     }
   }
 
-  // Search medical records
-  Future<List<Map<String, dynamic>>> searchMedicalRecords({
-    required String petId,
-    String? searchTerm,
-    List<String>? recordTypes,
-    DateTime? startDate,
-    DateTime? endDate,
-    int? limit,
-  }) async {
+  Future<Map<String, dynamic>> getMedicalSummary(String userId, String petId) async {
     try {
-      Query query = _firestore
-          .collection('pets')
-          .doc(petId)
-          .collection('medicalRecords')
-          .orderBy('date', descending: true);
-
-      if (startDate != null) {
-        query = query.where('date',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
-      }
-
-      if (endDate != null) {
-        query = query.where('date',
-            isLessThanOrEqualTo: Timestamp.fromDate(endDate));
-      }
-
-      if (recordTypes != null && recordTypes.isNotEmpty) {
-        query = query.where('recordType', whereIn: recordTypes);
-      }
-
-      if (limit != null) {
-        query = query.limit(limit);
-      }
-
-      final querySnapshot = await query.get();
-      final records = querySnapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
-          .toList();
-
-      if (searchTerm != null && searchTerm.isNotEmpty) {
-        final searchLower = searchTerm.toLowerCase();
-        return records.where((record) {
-          return record['veterinarianName'].toString().toLowerCase().contains(searchLower) ||
-              record['clinicName'].toString().toLowerCase().contains(searchLower) ||
-              (record['diagnosis'] ?? '').toString().toLowerCase().contains(searchLower) ||
-              (record['treatment'] ?? '').toString().toLowerCase().contains(searchLower) ||
-              (record['notes'] ?? '').toString().toLowerCase().contains(searchLower);
-        }).toList();
-      }
-
-      return records;
-    } catch (e) {
-      throw MedicalRecordException('Error searching medical records: $e');
+      await checkConnectivity();
+      
+      final summary = await _petMedicalRef(userId, petId).doc('summary').get();
+      return summary.data() as Map<String, dynamic>;
+    } catch (e, stackTrace) {
+      logger.e('Error getting medical summary', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw MedicalRecordException('Error getting medical summary: $e');
     }
   }
 }

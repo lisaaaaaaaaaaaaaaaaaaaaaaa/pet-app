@@ -1,45 +1,49 @@
-name: golden_years
-description: A pet healthcare management app.
+name: golden_years_pet_app
+description: "Golden Years Pet App"
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.2.3 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.2
-  provider: ^6.0.5
-  shared_preferences: ^2.2.0
-  intl: ^0.18.1
-  image_picker: ^1.0.4
-  cached_network_image: ^3.2.3
-  fl_chart: ^0.63.0
-  url_launcher: ^6.1.12
-  google_fonts: ^5.1.0
-  flutter_svg: ^2.0.7
-  lottie: ^2.6.0
-  connectivity_plus: ^5.0.2
-  http: ^1.1.0
-  path_provider: ^2.1.1
-  sqflite: ^2.3.0
-  flutter_local_notifications: ^16.2.0
-  permission_handler: ^11.0.1
+  provider: ^6.1.1
+  firebase_core: ^2.24.2
+  firebase_auth: ^4.15.3
+  cloud_firestore: ^4.13.6
+  firebase_storage: ^11.5.6
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.3.10
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
 
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icons/app_icon.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+
+flutter_native_splash:
+  color: "#90BAAD"
+  image: assets/images/splash.png
+  android_12:
+    image: assets/images/splash.png
+    icon_background_color: "#90BAAD"
+
 flutter:
   uses-material-design: true
-
+  
   assets:
-    - assets/images/
     - assets/icons/
-    - assets/animations/
-
+    - assets/images/
+    
   fonts:
     - family: Poppins
       fonts:

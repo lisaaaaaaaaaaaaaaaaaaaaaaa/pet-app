@@ -1,25 +1,29 @@
-// lib/screens/pet/pet_profile_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'dart:io';
+import 'package:share_plus/share_plus.dart';
 import '../../providers/pet_provider.dart';
-import '../../providers/auth_provider.dart';
+import '../../providers/subscription_provider.dart';
+import '../../models/pet.dart';
 import '../../models/pet_profile.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/pet/profile_image_picker.dart';
-import '../../widgets/common/error_view.dart';
 import '../../widgets/common/loading_overlay.dart';
-import 'pet_profile_settings.dart';
-import 'edit_pet_profile_screen.dart';
+import '../../widgets/common/error_view.dart';
+import '../../widgets/common/confirmation_dialog.dart';
+import '../../widgets/common/premium_feature_dialog.dart';
+import '../../widgets/pet/pet_info_card.dart';
+import '../../widgets/pet/pet_stats_card.dart';
+import '../../widgets/pet/pet_health_card.dart';
+import '../../widgets/pet/pet_timeline_card.dart';
+import '../../utils/analytics_helper.dart';
+import '../../utils/pdf_generator.dart';
+import '../../utils/date_formatter.dart';
 
 class PetProfileScreen extends StatefulWidget {
   final String petId;
 
   const PetProfileScreen({
-    Key? key, 
+    Key? key,
     required this.petId,
   }) : super(key: key);
 
@@ -27,77 +31,184 @@ class PetProfileScreen extends StatefulWidget {
   State<PetProfileScreen> createState() => _PetProfileScreenState();
 }
 
-class _PetProfileScreenState extends State<PetProfileScreen> {
-  final ImagePicker _picker = ImagePicker();
+class _PetProfileScreenState extends State<PetProfileScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   bool _isLoading = false;
   String? _error;
+  bool _isSubscribed = false;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+    _isSubscribed = context.read<SubscriptionProvider>().isSubscribed;
     _loadPetProfile();
+    
+    AnalyticsHelper.logScreenView('pet_profile', {'pet_id': widget.petId});
   }
 
   Future<void> _loadPetProfile() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
     try {
       await context.read<PetProvider>().loadPetProfile(widget.petId);
-      _error = null;
     } catch (e) {
-      _error = 'Failed to load pet profile: $e';
+      setState(() => _error = 'Failed to load pet profile: $e');
+      AnalyticsHelper.logError('pet_profile_load_error', e.toString());
     } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _updateProfileImage() async {
-    try {
-      final XFile? image = await ProfileImagePicker.show(
-        context: context,
-        currentImageUrl: context
-            .read<PetProvider>()
-            .selectedPetProfile
-            ?.photoUrl,
-      );
-
-      if (image != null) {
-        setState(() => _isLoading = true);
-        await context.read<PetProvider>().updatePetProfileImage(
-          petId: widget.petId,
-          imageFile: File(image.path),
-        );
-        _showSuccessMessage('Profile image updated successfully');
-      }
-    } catch (e) {
-      _showErrorMessage('Failed to update profile image: $e');
-    } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _refreshProfile() async {
-    await _loadPetProfile();
+    try {
+      await context.read<PetProvider>().loadPetProfile(
+        widget.petId,
+        forceRefresh: true,
+      );
+    } catch (e) {
+      _showErrorSnackBar('Failed to refresh: $e');
+    }
   }
 
-  void _navigateToSettings() {
-    Navigator.push(
+  Future<void> _navigateToEditProfile(Pet pet, PetProfile profile) async {
+    final result = await Navigator.pushNamed(
       context,
-      MaterialPageRoute(
-        builder: (context) => PetProfileSettings(petId: widget.petId),
+      '/edit-pet',
+      arguments: {
+        'pet': pet,
+        'profile': profile,
+      },
+    );
+
+    if (result == true) {
+      _refreshProfile();
+      _showSuccessSnackBar('Profile updated successfully');
+    }
+  }
+
+  Future<void> _handleMenuAction(String action) async {
+    switch (action) {
+      case 'share':
+        await _sharePetProfile();
+        break;
+      case 'export':
+        await _exportPetRecords();
+        break;
+      case 'archive':
+        await _showArchiveConfirmation();
+        break;
+    }
+  }
+
+  Future<void> _sharePetProfile() async {
+    final pet = context.read<PetProvider>().getPet(widget.petId);
+    if (pet == null) return;
+
+    final shareText = '''
+${pet.name}'s Pet Profile
+Species: ${pet.species}
+Breed: ${pet.breed}
+Birthday: ${DateFormatter.formatDate(pet.dateOfBirth)}
+
+Download our app to manage your pet's health and care!
+''';
+
+    try {
+      await Share.share(shareText, subject: '${pet.name}\'s Pet Profile');
+      AnalyticsHelper.logEvent('share_pet_profile', {'pet_id': widget.petId});
+    } catch (e) {
+      _showErrorSnackBar('Failed to share profile: $e');
+    }
+  }
+
+  Future<void> _exportPetRecords() async {
+    if (!_isSubscribed) {
+      _showSubscriptionDialog('Export Records');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final pet = context.read<PetProvider>().getPet(widget.petId);
+      final profile = context.read<PetProvider>().getPetProfile(widget.petId);
+      
+      if (pet == null || profile == null) {
+        throw Exception('Pet data not found');
+      }
+
+      final pdfFile = await PdfGenerator.generatePetReport(pet, profile);
+      await Share.shareFiles(
+        [pdfFile.path],
+        text: '${pet.name}\'s Health Records',
+      );
+      
+      AnalyticsHelper.logEvent('export_pet_records', {'pet_id': widget.petId});
+    } catch (e) {
+      _showErrorSnackBar('Failed to export records: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _showArchiveConfirmation() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => const ConfirmationDialog(
+        title: 'Archive Pet Profile',
+        content: 'This will hide the pet profile from your main list. '
+                'You can restore it later from the archived pets section.',
+        confirmText: 'Archive',
+        isDestructive: true,
+      ),
+    );
+
+    if (confirmed == true) {
+      await _archivePet();
+    }
+  }
+
+  Future<void> _archivePet() async {
+    setState(() => _isLoading = true);
+
+    try {
+      await context.read<PetProvider>().archivePet(widget.petId);
+      
+      if (!mounted) return;
+      
+      _showSuccessSnackBar('Pet archived successfully');
+      Navigator.pop(context, true);
+      
+      AnalyticsHelper.logEvent('archive_pet', {'pet_id': widget.petId});
+    } catch (e) {
+      _showErrorSnackBar('Failed to archive pet: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showSubscriptionDialog(String feature) {
+    showDialog(
+      context: context,
+      builder: (context) => PremiumFeatureDialog(
+        title: 'Premium Feature',
+        content: '$feature is a premium feature. '
+                'Upgrade to unlock this and other premium features!',
+        onUpgrade: () {
+          Navigator.pop(context);
+          Navigator.pushNamed(context, '/subscription');
+        },
       ),
     );
   }
 
-  void _navigateToEdit() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => EditPetProfileScreen(petId: widget.petId),
-      ),
-    ).then((_) => _refreshProfile());
-  }
-
-  void _showSuccessMessage(String message) {
+  void _showSuccessSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -107,7 +218,8 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
     );
   }
 
-  void _showErrorMessage(String message) {
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -124,350 +236,195 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) {
-      return ErrorView(
-        message: _error!,
-        onRetry: _refreshProfile,
-      );
-    }
+    return Scaffold(
+      body: Consumer<PetProvider>(
+        builder: (context, provider, child) {
+          final pet = provider.getPet(widget.petId);
+          final profile = provider.getPetProfile(widget.petId);
 
-    return Consumer<PetProvider>(
-      builder: (context, petProvider, child) {
-        final profile = petProvider.selectedPetProfile;
+          if (_error != null) {
+            return ErrorView(
+              message: _error!,
+              onRetry: _loadPetProfile,
+            );
+          }
 
-        if (profile == null && _isLoading) {
-          return const LoadingOverlay();
-        }
+          if (pet == null || profile == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-        if (profile == null) {
-          return const Center(child: Text('Pet profile not found'));
-        }
-
-        return Scaffold(
-          body: Stack(
+          return Stack(
             children: [
-              RefreshIndicator(
-                onRefresh: _refreshProfile,
-                child: CustomScrollView(
-                  slivers: [
-                    _buildAppBar(profile),
-                    SliverToBoxAdapter(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildProfileHeader(profile),
-                          _buildInfoSection(profile),
-                          _buildHealthSection(profile),
-                          _buildVetSection(profile),
-                          _buildEmergencySection(profile),
-                        ],
-                      ),
+              NestedScrollView(
+                headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                  _buildSliverAppBar(pet),
+                  _buildSliverPersistentHeader(),
+                ],
+                body: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildInfoTab(pet, profile),
+                    PetHealthCard(
+                      pet: pet,
+                      profile: profile,
+                      isSubscribed: _isSubscribed,
                     ),
+                    PetTimelineCard(
+                      petId: widget.petId,
+                      isSubscribed: _isSubscribed,
+                    ),
+                    _buildGalleryTab(pet, profile),
                   ],
                 ),
               ),
               if (_isLoading) const LoadingOverlay(),
             ],
-          ),
-          floatingActionButton: _buildFAB(),
-        );
-      },
+          );
+        },
+      ),
+      floatingActionButton: _buildFloatingActionButton(),
     );
   }
 
-  // ... (continued in next part)
-  // Continuing lib/screens/pet/pet_profile_screen.dart
-
-  Widget _buildAppBar(PetProfile profile) {
+  Widget _buildSliverAppBar(Pet pet) {
     return SliverAppBar(
-      expandedHeight: 200.0,
+      expandedHeight: 300,
       pinned: true,
       flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          fit: StackFit.expand,
-          children: [
-            _buildProfileImage(profile),
-            _buildGradientOverlay(),
-          ],
-        ),
-        title: Text(
-          profile.name,
-          style: const TextStyle(
-            shadows: [
-              Shadow(
-                offset: Offset(0, 1),
-                blurRadius: 3.0,
-                color: Color.fromARGB(255, 0, 0, 0),
-              ),
-            ],
+        title: Text(pet.name),
+        background: Hero(
+          tag: 'pet_image_${pet.id}',
+          child: CachedNetworkImage(
+            imageUrl: pet.photoUrl,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(
+              color: Colors.grey[300],
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+            errorWidget: (context, url, error) => Container(
+              color: Colors.grey[300],
+              child: const Icon(Icons.pets, size: 64),
+            ),
           ),
         ),
       ),
       actions: [
         IconButton(
           icon: const Icon(Icons.edit),
-          onPressed: _navigateToEdit,
-          tooltip: 'Edit Profile',
+          onPressed: () {
+            final pet = context.read<PetProvider>().getPet(widget.petId);
+            final profile = context.read<PetProvider>().getPetProfile(widget.petId);
+            if (pet != null && profile != null) {
+              _navigateToEditProfile(pet, profile);
+            }
+          },
         ),
-        IconButton(
-          icon: const Icon(Icons.settings),
-          onPressed: _navigateToSettings,
-          tooltip: 'Settings',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProfileImage(PetProfile profile) {
-    return GestureDetector(
-      onTap: _updateProfileImage,
-      child: profile.photoUrl.isNotEmpty
-          ? CachedNetworkImage(
-              imageUrl: profile.photoUrl,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                color: AppColors.primary.withOpacity(0.1),
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
-              ),
-              errorWidget: (context, url, error) => Container(
-                color: AppColors.primary.withOpacity(0.1),
-                child: const Icon(
-                  Icons.pets,
-                  size: 50,
-                  color: AppColors.primary,
-                ),
-              ),
-            )
-          : Container(
-              color: AppColors.primary.withOpacity(0.1),
-              child: const Icon(
-                Icons.pets,
-                size: 50,
-                color: AppColors.primary,
-              ),
+        PopupMenuButton<String>(
+          onSelected: _handleMenuAction,
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'share',
+              child: Text('Share Profile'),
             ),
-    );
-  }
-
-  Widget _buildGradientOverlay() {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            Colors.black.withOpacity(0.7),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileHeader(PetProfile profile) {
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _buildProfileStats(profile),
-            const Divider(height: 32),
-            _buildQuickActions(profile),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileStats(PetProfile profile) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: [
-        _buildStat('Age', '${profile.age} years'),
-        _buildStat('Weight', '${profile.weight} kg'),
-        _buildStat('Gender', profile.gender),
-      ],
-    );
-  }
-
-  Widget _buildStat(String label, String value) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.grey,
-            fontSize: 12,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuickActions(PetProfile profile) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      alignment: WrapAlignment.center,
-      children: [
-        _buildActionChip(
-          label: 'Health Records',
-          icon: Icons.medical_services,
-          onTap: () => _navigateToHealthRecords(profile),
-        ),
-        _buildActionChip(
-          label: 'Medications',
-          icon: Icons.medication,
-          onTap: () => _navigateToMedications(profile),
-        ),
-        _buildActionChip(
-          label: 'Appointments',
-          icon: Icons.calendar_today,
-          onTap: () => _navigateToAppointments(profile),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionChip({
-    required String label,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return ActionChip(
-      avatar: Icon(icon, size: 18),
-      label: Text(label),
-      onPressed: onTap,
-    );
-  }
-
-  Widget _buildSection(String title, List<Widget> children) {
-    if (children.isEmpty) return const SizedBox.shrink();
-    
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 20),
-                  onPressed: () => _editSection(title),
-                ),
-              ],
+            const PopupMenuItem(
+              value: 'export',
+              child: Text('Export Records'),
             ),
-            const Divider(),
-            ...children,
+            const PopupMenuItem(
+              value: 'archive',
+              child: Text('Archive Pet'),
+            ),
           ],
         ),
-      ),
+      ],
     );
   }
 
-  // ... (continued in next part)
-  // Continuing lib/screens/pet/pet_profile_screen.dart
+  Widget _buildSliverPersistentHeader() {
+    return SliverPersistentHeader(
+      delegate: _SliverAppBarDelegate(
+        TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Info'),
+            Tab(text: 'Health'),
+            Tab(text: 'Timeline'),
+            Tab(text: 'Gallery'),
+          ],
+          labelColor: AppColors.primary,
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: AppColors.primary,
+        ),
+      ),
+      pinned: true,
+    );
+  }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildInfoTab(Pet pet, PetProfile profile) {
+    return RefreshIndicator(
+      onRefresh: _refreshProfile,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(height: 1.3),
-            ),
-          ),
+          PetInfoCard(pet: pet, profile: profile),
+          const SizedBox(height: 16),
+          PetStatsCard(pet: pet, profile: profile),
         ],
       ),
     );
   }
 
-  Widget _buildListRow(String label, List<String> items) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
+  Widget _buildGalleryTab(Pet pet, PetProfile profile) {
+    if (!_isSubscribed) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.lock, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text(
+              'Premium Feature',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: items.map((item) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Expanded(
-                      child: Text(
-                        item,
-                        style: const TextStyle(height: 1.3),
-                      ),
-                    ),
-                  ],
-                ),
-              )).toList(),
+            const SizedBox(height: 8),
+            const Text(
+              'Upgrade to access the photo gallery',
+              style: TextStyle(color: Colors.grey),
             ),
-          ),
-        ],
-      ),
-    );
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => Navigator.pushNamed(context, '/subscription'),
+              child: const Text('UPGRADE NOW'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Implement gallery view here
+    return const Center(child: Text('Gallery Coming Soon'));
   }
 
-  Widget _buildFAB() {
-    return FloatingActionButton.extended(
-      onPressed: _showQuickActionsMenu,
-      icon: const Icon(Icons.add),
-      label: const Text('Add Record'),
+  Widget _buildFloatingActionButton() {
+    return FloatingActionButton(
+      onPressed: () {
+        if (!_isSubscribed) {
+          _showSubscriptionDialog('Quick Actions');
+          return;
+        }
+        _showQuickActionsMenu();
+      },
+      backgroundColor: AppColors.primary,
+      child: const Icon(Icons.add),
     );
   }
 
   void _showQuickActionsMenu() {
     showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -477,23 +434,35 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
               title: const Text('Add Health Record'),
               onTap: () {
                 Navigator.pop(context);
-                _navigateToAddHealthRecord();
+                Navigator.pushNamed(
+                  context,
+                  '/add-health-record',
+                  arguments: widget.petId,
+                );
               },
             ),
             ListTile(
-              leading: const Icon(Icons.medication),
-              title: const Text('Add Medication'),
+              leading: const Icon(Icons.event),
+              title: const Text('Schedule Reminder'),
               onTap: () {
                 Navigator.pop(context);
-                _navigateToAddMedication();
+                Navigator.pushNamed(
+                  context,
+                  '/add-reminder',
+                  arguments: widget.petId,
+                );
               },
             ),
             ListTile(
-              leading: const Icon(Icons.calendar_today),
-              title: const Text('Schedule Appointment'),
+              leading: const Icon(Icons.photo_camera),
+              title: const Text('Add Photo'),
               onTap: () {
                 Navigator.pop(context);
-                _navigateToAddAppointment();
+                Navigator.pushNamed(
+                  context,
+                  '/add-photo',
+                  arguments: widget.petId,
+                );
               },
             ),
           ],
@@ -502,117 +471,31 @@ class _PetProfileScreenState extends State<PetProfileScreen> {
     );
   }
 
-  void _navigateToHealthRecords(PetProfile profile) {
-    Navigator.pushNamed(
-      context,
-      '/pet/health-records',
-      arguments: {'petId': profile.id},
-    );
-  }
-
-  void _navigateToMedications(PetProfile profile) {
-    Navigator.pushNamed(
-      context,
-      '/pet/medications',
-      arguments: {'petId': profile.id},
-    );
-  }
-
-  void _navigateToAppointments(PetProfile profile) {
-    Navigator.pushNamed(
-      context,
-      '/pet/appointments',
-      arguments: {'petId': profile.id},
-    );
-  }
-
-  void _navigateToAddHealthRecord() {
-    Navigator.pushNamed(
-      context,
-      '/pet/health-records/add',
-      arguments: {'petId': widget.petId},
-    );
-  }
-
-  void _navigateToAddMedication() {
-    Navigator.pushNamed(
-      context,
-      '/pet/medications/add',
-      arguments: {'petId': widget.petId},
-    );
-  }
-
-  void _navigateToAddAppointment() {
-    Navigator.pushNamed(
-      context,
-      '/pet/appointments/add',
-      arguments: {'petId': widget.petId},
-    );
-  }
-
-  void _editSection(String section) {
-    Navigator.pushNamed(
-      context,
-      '/pet/edit-profile',
-      arguments: {
-        'petId': widget.petId,
-        'section': section,
-      },
-    ).then((_) => _refreshProfile());
-  }
-
   @override
   void dispose() {
-    // Clean up any controllers or listeners here
+    _tabController.dispose();
     super.dispose();
   }
 }
 
-// Custom widgets that can be moved to separate files
-class HealthCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Widget child;
-  final VoidCallback? onTap;
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar _tabBar;
 
-  const HealthCard({
-    Key? key,
-    required this.title,
-    required this.icon,
-    required this.child,
-    this.onTap,
-  }) : super(key: key);
+  _SliverAppBarDelegate(this._tabBar);
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, size: 20, color: AppColors.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const Divider(height: 24),
-              child,
-            ],
-          ),
-        ),
-      ),
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: _tabBar,
     );
   }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) => false;
 }

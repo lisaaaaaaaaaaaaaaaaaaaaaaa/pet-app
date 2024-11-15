@@ -3,109 +3,103 @@ import '../theme/app_theme.dart';
 
 class AppLogo extends StatelessWidget {
   final double size;
-  final bool showText;
   final Color? color;
-  final bool isAnimated;
-  final bool useGradient;
+  final bool showText;
+  final bool showTagline;
+  final TextStyle? textStyle;
+  final TextStyle? taglineStyle;
+  final double? iconSize;
+  final MainAxisAlignment alignment;
+  final bool vertical;
 
   const AppLogo({
     Key? key,
-    this.size = 100,
-    this.showText = true,
+    this.size = 40,
     this.color,
-    this.isAnimated = false,
-    this.useGradient = true,
+    this.showText = true,
+    this.showTagline = false,
+    this.textStyle,
+    this.taglineStyle,
+    this.iconSize,
+    this.alignment = MainAxisAlignment.center,
+    this.vertical = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final Widget logoIcon = Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: useGradient
-            ? AppTheme.primaryGradient
-            : null,
-        color: useGradient ? null : (color ?? AppTheme.primaryGreen),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryGreen.withOpacity(0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Icon(
-          Icons.pets,
-          size: size * 0.5,
-          color: Colors.white,
-        ),
+    final logoColor = color ?? AppTheme.primaryColor;
+    final effectiveIconSize = iconSize ?? size;
+
+    Widget logoIcon = SizedBox(
+      width: effectiveIconSize,
+      height: effectiveIconSize,
+      child: CustomPaint(
+        painter: LogoPainter(color: logoColor),
       ),
     );
 
-    final Widget logo = isAnimated
-        ? TweenAnimationBuilder<double>(
-            duration: const Duration(milliseconds: 800),
-            tween: Tween(begin: 0.0, end: 1.0),
-            curve: Curves.easeInOut,
-            builder: (context, value, child) {
-              return Transform.scale(
-                scale: value,
-                child: Opacity(
-                  opacity: value,
-                  child: child,
-                ),
-              );
-            },
-            child: logoIcon,
-          )
-        : logoIcon;
-
-    if (!showText) {
-      return logo;
+    Widget? logoText;
+    if (showText) {
+      logoText = Text(
+        'HealthTracker',
+        style: textStyle ??
+            TextStyle(
+              fontSize: size * 0.8,
+              fontWeight: FontWeight.bold,
+              color: logoColor,
+              letterSpacing: 0.5,
+            ),
+      );
     }
 
-    return Column(
+    Widget? tagline;
+    if (showTagline) {
+      tagline = Text(
+        'Your Health, Your Way',
+        style: taglineStyle ??
+            TextStyle(
+              fontSize: size * 0.3,
+              color: logoColor.withOpacity(0.8),
+              letterSpacing: 0.5,
+            ),
+      );
+    }
+
+    if (vertical) {
+      return Column(
+        mainAxisAlignment: alignment,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          logoIcon,
+          if (showText) ...[
+            SizedBox(height: size * 0.2),
+            logoText!,
+          ],
+          if (showTagline) ...[
+            SizedBox(height: size * 0.1),
+            tagline!,
+          ],
+        ],
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: alignment,
       mainAxisSize: MainAxisSize.min,
       children: [
-        logo,
+        logoIcon,
         if (showText) ...[
-          const SizedBox(height: 16),
-          TweenAnimationBuilder<double>(
-            duration: const Duration(milliseconds: 800),
-            tween: Tween(begin: 0.0, end: 1.0),
-            curve: Curves.easeInOut,
-            builder: (context, value, child) {
-              return Opacity(
-                opacity: value,
-                child: Transform.translate(
-                  offset: Offset(0, 20 * (1 - value)),
-                  child: child,
-                ),
-              );
-            },
-            child: Column(
-              children: [
-                Text(
-                  'Golden Years',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: color ?? AppTheme.primaryGreen,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Senior Pet Care',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppTheme.secondaryGreen,
-                        letterSpacing: 0.8,
-                      ),
-                ),
+          SizedBox(width: size * 0.3),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              logoText!,
+              if (showTagline) ...[
+                SizedBox(height: size * 0.1),
+                tagline!,
               ],
-            ),
+            ],
           ),
         ],
       ],
@@ -113,84 +107,60 @@ class AppLogo extends StatelessWidget {
   }
 }
 
-// Animated variant for splash screen
-class AnimatedAppLogo extends StatefulWidget {
-  final double size;
-  final bool showText;
-  final Color? color;
-  final VoidCallback? onAnimationComplete;
+class LogoPainter extends CustomPainter {
+  final Color color;
 
-  const AnimatedAppLogo({
-    Key? key,
-    this.size = 120,
-    this.showText = true,
-    this.color,
-    this.onAnimationComplete,
-  }) : super(key: key);
+  LogoPainter({
+    required this.color,
+  });
 
   @override
-  State<AnimatedAppLogo> createState() => _AnimatedAppLogoState();
-}
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
 
-class _AnimatedAppLogoState extends State<AnimatedAppLogo>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
+    // Outer circle
+    final outerPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.08;
+    canvas.drawCircle(center, radius * 0.9, outerPaint);
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
+    // Inner circle
+    final innerPaint = Paint()
+      ..color = color.withOpacity(0.2)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius * 0.7, innerPaint);
+
+    // Heart shape
+    final heartPath = Path();
+    final heartSize = radius * 0.5;
+    final heartCenter = center;
+
+    heartPath.moveTo(heartCenter.dx, heartCenter.dy + heartSize * 0.3);
+    heartPath.cubicTo(
+      heartCenter.dx - heartSize,
+      heartCenter.dy - heartSize * 0.6,
+      heartCenter.dx - heartSize,
+      heartCenter.dy - heartSize * 1.4,
+      heartCenter.dx,
+      heartCenter.dy - heartSize * 0.5,
+    );
+    heartPath.cubicTo(
+      heartCenter.dx + heartSize,
+      heartCenter.dy - heartSize * 1.4,
+      heartCenter.dx + heartSize,
+      heartCenter.dy - heartSize * 0.6,
+      heartCenter.dx,
+      heartCenter.dy + heartSize * 0.3,
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOutBack),
-      ),
-    );
-
-    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.4, 1.0, curve: Curves.easeInOut),
-      ),
-    );
-
-    _controller.forward().then((_) {
-      if (widget.onAnimationComplete != null) {
-        widget.onAnimationComplete!();
-      }
-    });
+    final heartPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(heartPath, heartPaint);
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: _scaleAnimation.value,
-          child: Opacity(
-            opacity: _opacityAnimation.value,
-            child: AppLogo(
-              size: widget.size,
-              showText: widget.showText,
-              color: widget.color,
-              isAnimated: false,
-            ),
-          ),
-        );
-      },
-    );
-  }
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

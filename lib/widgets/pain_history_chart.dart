@@ -1,232 +1,209 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../models/pain_record.dart';
 import '../theme/app_theme.dart';
-import 'common/custom_card.dart';
+import '../utils/date_formatter.dart';
 
 class PainHistoryChart extends StatelessWidget {
-  final String petName;
-  final List<PainRecord> painHistory;
-  final int daysToShow;
-  final bool showLegend;
-  final VoidCallback? onAddRecord;
-  final Function(PainRecord)? onRecordTap;
-  final bool isLoading;
-  final String? notes;
+  final List<PainRecord> records;
+  final int days;
+  final bool showGrid;
+  final bool showLabels;
+  final bool showTooltip;
+  final double height;
+  final Color? lineColor;
+  final Color? gradientStartColor;
+  final Color? gradientEndColor;
+  final bool animate;
 
   const PainHistoryChart({
     Key? key,
-    required this.petName,
-    required this.painHistory,
-    this.daysToShow = 7,
-    this.showLegend = true,
-    this.onAddRecord,
-    this.onRecordTap,
-    this.isLoading = false,
-    this.notes,
+    required this.records,
+    this.days = 7,
+    this.showGrid = true,
+    this.showLabels = true,
+    this.showTooltip = true,
+    this.height = 200,
+    this.lineColor,
+    this.gradientStartColor,
+    this.gradientEndColor,
+    this.animate = true,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return CustomCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Pain History',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: AppTheme.primaryGreen,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    petName,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.secondaryGreen,
-                        ),
-                  ),
-                ],
-              ),
-              if (onAddRecord != null)
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  color: AppTheme.primaryGreen,
-                  onPressed: isLoading ? null : onAddRecord,
-                ),
-            ],
-          ),
-          if (isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else ...[
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 200,
-              child: _buildChart(context),
+    if (records.isEmpty) {
+      return SizedBox(
+        height: height,
+        child: const Center(
+          child: Text(
+            'No pain records available',
+            style: TextStyle(
+              color: AppTheme.textSecondaryColor,
+              fontSize: 14,
             ),
-            if (showLegend) ...[
-              const SizedBox(height: 16),
-              _buildLegend(context),
-            ],
-            if (notes != null) ...[
-              const SizedBox(height: 16),
-              _buildNotes(context),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChart(BuildContext context) {
-    if (painHistory.isEmpty) {
-      return Center(
-        child: Text(
-          'No pain records available',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.neutralGrey,
-              ),
+          ),
         ),
       );
     }
 
-    return LineChart(
-      LineChartData(
-        gridData: FlGridData(show: false),
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              interval: 1,
-              reservedSize: 30,
-              getTitlesWidget: (value, meta) => Text(
-                value.toInt().toString(),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.neutralGrey,
-                    ),
+    return SizedBox(
+      height: height,
+      child: LineChart(
+        LineChartData(
+          gridData: FlGridData(show: showGrid),
+          titlesData: FlTitlesData(
+            show: showLabels,
+            topTitles: AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: showLabels,
+                getTitlesWidget: _bottomTitleWidgets,
+                reservedSize: 22,
+              ),
+            ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: showLabels,
+                getTitlesWidget: _leftTitleWidgets,
+                reservedSize: 32,
               ),
             ),
           ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              interval: 1,
-              getTitlesWidget: (value, meta) {
-                final date = DateTime.now().subtract(
-                  Duration(days: (daysToShow - value.toInt() - 1)),
-                );
-                return Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    '${date.day}/${date.month}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppTheme.neutralGrey,
-                        ),
-                  ),
-                );
+          borderData: FlBorderData(show: false),
+          lineBarsData: [_createLineData()],
+          minX: 0,
+          maxX: days.toDouble() - 1,
+          minY: 0,
+          maxY: 10,
+          lineTouchData: LineTouchData(
+            enabled: showTooltip,
+            touchTooltipData: LineTouchTooltipData(
+              tooltipBgColor: AppTheme.cardBackgroundColor,
+              getTooltipItems: (touchedSpots) {
+                return touchedSpots.map((spot) {
+                  final record = records[spot.x.toInt()];
+                  return LineTooltipItem(
+                    '${record.painLevel.toInt()}/10\n${DateFormatter.formatDate(record.timestamp)}',
+                    const TextStyle(
+                      color: AppTheme.textPrimaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                }).toList();
               },
             ),
           ),
-          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
-        borderData: FlBorderData(show: false),
-        minX: 0,
-        maxX: daysToShow.toDouble() - 1,
-        minY: 0,
-        maxY: 10,
-        lineBarsData: [
-          LineChartBarData(
-            spots: _createSpots(),
-            isCurved: true,
-            color: AppTheme.primaryGreen,
-            barWidth: 3,
-            isStrokeCapRound: true,
-            dotData: FlDotData(
-              show: true,
-              getDotPainter: (spot, percent, barData, index) {
-                return FlDotCirclePainter(
-                  radius: 6,
-                  color: AppTheme.primaryGreen,
-                  strokeWidth: 2,
-                  strokeColor: Colors.white,
-                );
-              },
-            ),
-            belowBarData: BarAreaData(
-              show: true,
-              color: AppTheme.primaryGreen.withOpacity(0.1),
-            ),
-          ),
-        ],
-        lineTouchData: LineTouchData(
-          touchTooltipData: LineTouchTooltipData(
-            tooltipBgColor: AppTheme.primaryGreen.withOpacity(0.8),
-            getTooltipItems: (touchedSpots) {
-              return touchedSpots.map((spot) {
-                final record = painHistory[spot.x.toInt()];
-                return LineTooltipItem(
-                  'Pain Level: ${spot.y.toInt()}\n${record.location}',
-                  const TextStyle(color: Colors.white),
-                );
-              }).toList();
-            },
-          ),
-          handleBuiltInTouches: true,
-          touchCallback: (event, response) {
-            if (event is FlTapUpEvent && response?.lineBarSpots != null) {
-              final index = response!.lineBarSpots!.first.x.toInt();
-              onRecordTap?.call(painHistory[index]);
-            }
-          },
+        swapAnimationDuration: animate
+            ? const Duration(milliseconds: 500)
+            : const Duration(milliseconds: 0),
+        swapAnimationCurve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  LineChartBarData _createLineData() {
+    final spots = records.asMap().entries.map((entry) {
+      return FlSpot(
+        entry.key.toDouble(),
+        entry.value.painLevel.toDouble(),
+      );
+    }).toList();
+
+    return LineChartBarData(
+      spots: spots,
+      isCurved: true,
+      color: lineColor ?? AppTheme.primaryColor,
+      barWidth: 3,
+      isStrokeCapRound: true,
+      dotData: FlDotData(
+        show: true,
+        getDotPainter: (spot, percent, barData, index) {
+          return FlDotCirclePainter(
+            radius: 4,
+            color: lineColor ?? AppTheme.primaryColor,
+            strokeWidth: 2,
+            strokeColor: AppTheme.cardBackgroundColor,
+          );
+        },
+      ),
+      belowBarData: BarAreaData(
+        show: true,
+        gradient: LinearGradient(
+          colors: [
+            (gradientStartColor ?? AppTheme.primaryColor).withOpacity(0.3),
+            (gradientEndColor ?? AppTheme.primaryColor).withOpacity(0.0),
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
         ),
       ),
     );
   }
 
-  List<FlSpot> _createSpots() {
-    final spots = <FlSpot>[];
-    for (var i = 0; i < painHistory.length; i++) {
-      spots.add(FlSpot(i.toDouble(), painHistory[i].painLevel.toDouble()));
+  Widget _bottomTitleWidgets(double value, TitleMeta meta) {
+    if (!showLabels || value.toInt() >= records.length) {
+      return const SizedBox.shrink();
     }
-    return spots;
+
+    final record = records[value.toInt()];
+    final text = DateFormatter.formatShortDate(record.timestamp);
+
+    return SideTitleWidget(
+      axisSide: meta.axisSide,
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppTheme.textSecondaryColor,
+          fontSize: 12,
+        ),
+      ),
+    );
   }
 
-  Widget _buildLegend(BuildContext context) {
-    return Wrap(
-      spacing: 16,
-      runSpacing: 8,
+  Widget _leftTitleWidgets(double value, TitleMeta meta) {
+    if (!showLabels || value % 2 != 0) {
+      return const SizedBox.shrink();
+    }
+
+    return SideTitleWidget(
+      axisSide: meta.axisSide,
+      child: Text(
+        value.toInt().toString(),
+        style: const TextStyle(
+          color: AppTheme.textSecondaryColor,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class PainLevelLegend extends StatelessWidget {
+  const PainLevelLegend({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _buildLegendItem(
-          context,
-          'Mild (1-3)',
-          AppTheme.success,
-        ),
-        _buildLegendItem(
-          context,
-          'Moderate (4-6)',
-          AppTheme.warning,
-        ),
-        _buildLegendItem(
-          context,
-          'Severe (7-10)',
-          AppTheme.error,
-        ),
+        _buildLegendItem('0-3', Colors.green, 'Mild'),
+        const SizedBox(width: 16),
+        _buildLegendItem('4-6', Colors.orange, 'Moderate'),
+        const SizedBox(width: 16),
+        _buildLegendItem('7-10', Colors.red, 'Severe'),
       ],
     );
   }
 
-  Widget _buildLegendItem(BuildContext context, String label, Color color) {
+  Widget _buildLegendItem(String range, Color color, String label) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 12,
@@ -238,56 +215,13 @@ class PainHistoryChart extends StatelessWidget {
         ),
         const SizedBox(width: 4),
         Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppTheme.neutralGrey,
-              ),
+          '$range ($label)',
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppTheme.textSecondaryColor,
+          ),
         ),
       ],
     );
   }
-
-  Widget _buildNotes(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.lightBlue.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.note,
-            size: 20,
-            color: AppTheme.primaryGreen,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              notes!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.secondaryGreen,
-                  ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class PainRecord {
-  final DateTime date;
-  final int painLevel;
-  final String location;
-  final String? notes;
-  final List<String>? symptoms;
-
-  const PainRecord({
-    required this.date,
-    required this.painLevel,
-    required this.location,
-    this.notes,
-    this.symptoms,
-  });
 }

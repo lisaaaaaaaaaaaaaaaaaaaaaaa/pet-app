@@ -1,79 +1,69 @@
-// lib/models/health_record.dart
-
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class HealthRecord {
   final String id;
   final String petId;
   final DateTime date;
   final String type;
-  final String description;
-  final Map<String, dynamic> vitals;
-  final List<String> attachments;
-  final String vetName;
-  final String diagnosis;
-  final List<String> prescriptions;
-  final List<String> treatments;
+  final String condition;
+  final String treatment;
+  final String? veterinarian;
+  final String? clinic;
   final String notes;
-  // New premium features
-  final String vetId;  // Links to CareTeamMember
-  final String clinicId;
-  final String clinicName;
-  final bool isEmergency;
-  final Map<String, dynamic> labResults;
+  final List<String> medications;
+  final List<String> vaccinations;
+  final Map<String, dynamic> vitals;
   final List<String> symptoms;
-  final List<String> diagnosticTests;
-  final Map<String, dynamic> vaccinations;
-  final double cost;
+  final String? diagnosis;
+  final List<String>? attachments;
+  final double? cost;
   final String? insuranceClaim;
+  final bool isEmergency;
+  final String? followUpInstructions;
+  // New enhanced fields
+  final String? createdBy;
+  final DateTime createdAt;
+  final bool isPremium;
+  final Map<String, dynamic>? metadata;
+  final Map<String, dynamic>? labResults;
+  final Map<String, dynamic>? procedures;
+  final List<String>? prescriptions;
   final DateTime? followUpDate;
-  final List<String> dietaryRestrictions;
-  final List<String> activityRestrictions;
-  final Map<String, dynamic> progressNotes;
-  final List<String> complications;
-  final bool requiresHospitalization;
-  final Map<String, dynamic> hospitalizationDetails;
-  final List<String> referrals;
-  final Map<String, dynamic> prognosis;
-  final List<String> preventiveMeasures;
-  final bool isSharedWithTeam;
+  final Map<String, dynamic>? diagnosticTests;
+  final RecordStatus status;
 
   HealthRecord({
     required this.id,
     required this.petId,
     required this.date,
     required this.type,
-    required this.description,
-    this.vitals = const {},
-    this.attachments = const [],
-    required this.vetName,
-    required this.diagnosis,
-    this.prescriptions = const [],
-    this.treatments = const [],
+    required this.condition,
+    required this.treatment,
+    this.veterinarian,
+    this.clinic,
     this.notes = '',
-    // New premium features
-    required this.vetId,
-    required this.clinicId,
-    required this.clinicName,
-    this.isEmergency = false,
-    this.labResults = const {},
+    this.medications = const [],
+    this.vaccinations = const [],
+    this.vitals = const {},
     this.symptoms = const [],
-    this.diagnosticTests = const [],
-    this.vaccinations = const {},
-    this.cost = 0.0,
+    this.diagnosis,
+    this.attachments,
+    this.cost,
     this.insuranceClaim,
+    this.isEmergency = false,
+    this.followUpInstructions,
+    this.createdBy,
+    DateTime? createdAt,
+    this.isPremium = false,
+    this.metadata,
+    this.labResults,
+    this.procedures,
+    this.prescriptions,
     this.followUpDate,
-    this.dietaryRestrictions = const [],
-    this.activityRestrictions = const [],
-    this.progressNotes = const {},
-    this.complications = const [],
-    this.requiresHospitalization = false,
-    this.hospitalizationDetails = const {},
-    this.referrals = const [],
-    this.prognosis = const {},
-    this.preventiveMeasures = const [],
-    this.isSharedWithTeam = false,
-  });
+    this.diagnosticTests,
+    this.status = RecordStatus.completed,
+  }) : this.createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {
@@ -81,36 +71,31 @@ class HealthRecord {
       'petId': petId,
       'date': date.toIso8601String(),
       'type': type,
-      'description': description,
-      'vitals': vitals,
-      'attachments': attachments,
-      'vetName': vetName,
-      'diagnosis': diagnosis,
-      'prescriptions': prescriptions,
-      'treatments': treatments,
+      'condition': condition,
+      'treatment': treatment,
+      'veterinarian': veterinarian,
+      'clinic': clinic,
       'notes': notes,
-      // New premium features
-      'vetId': vetId,
-      'clinicId': clinicId,
-      'clinicName': clinicName,
-      'isEmergency': isEmergency,
-      'labResults': labResults,
-      'symptoms': symptoms,
-      'diagnosticTests': diagnosticTests,
+      'medications': medications,
       'vaccinations': vaccinations,
+      'vitals': vitals,
+      'symptoms': symptoms,
+      'diagnosis': diagnosis,
+      'attachments': attachments,
       'cost': cost,
       'insuranceClaim': insuranceClaim,
+      'isEmergency': isEmergency,
+      'followUpInstructions': followUpInstructions,
+      'createdBy': createdBy,
+      'createdAt': createdAt.toIso8601String(),
+      'isPremium': isPremium,
+      'metadata': metadata,
+      'labResults': labResults,
+      'procedures': procedures,
+      'prescriptions': prescriptions,
       'followUpDate': followUpDate?.toIso8601String(),
-      'dietaryRestrictions': dietaryRestrictions,
-      'activityRestrictions': activityRestrictions,
-      'progressNotes': progressNotes,
-      'complications': complications,
-      'requiresHospitalization': requiresHospitalization,
-      'hospitalizationDetails': hospitalizationDetails,
-      'referrals': referrals,
-      'prognosis': prognosis,
-      'preventiveMeasures': preventiveMeasures,
-      'isSharedWithTeam': isSharedWithTeam,
+      'diagnosticTests': diagnosticTests,
+      'status': status.toString(),
     };
   }
 
@@ -120,115 +105,86 @@ class HealthRecord {
       petId: json['petId'],
       date: DateTime.parse(json['date']),
       type: json['type'],
-      description: json['description'],
-      vitals: Map<String, dynamic>.from(json['vitals'] ?? {}),
-      attachments: List<String>.from(json['attachments'] ?? []),
-      vetName: json['vetName'],
-      diagnosis: json['diagnosis'],
-      prescriptions: List<String>.from(json['prescriptions'] ?? []),
-      treatments: List<String>.from(json['treatments'] ?? []),
+      condition: json['condition'],
+      treatment: json['treatment'],
+      veterinarian: json['veterinarian'],
+      clinic: json['clinic'],
       notes: json['notes'] ?? '',
-      // New premium features
-      vetId: json['vetId'],
-      clinicId: json['clinicId'],
-      clinicName: json['clinicName'],
-      isEmergency: json['isEmergency'] ?? false,
-      labResults: Map<String, dynamic>.from(json['labResults'] ?? {}),
+      medications: List<String>.from(json['medications'] ?? []),
+      vaccinations: List<String>.from(json['vaccinations'] ?? []),
+      vitals: Map<String, dynamic>.from(json['vitals'] ?? {}),
       symptoms: List<String>.from(json['symptoms'] ?? []),
-      diagnosticTests: List<String>.from(json['diagnosticTests'] ?? []),
-      vaccinations: Map<String, dynamic>.from(json['vaccinations'] ?? {}),
-      cost: json['cost']?.toDouble() ?? 0.0,
-      insuranceClaim: json['insuranceClaim'],
-      followUpDate: json['followUpDate'] != null 
-          ? DateTime.parse(json['followUpDate']) 
+      diagnosis: json['diagnosis'],
+      attachments: json['attachments'] != null 
+          ? List<String>.from(json['attachments'])
           : null,
-      dietaryRestrictions: List<String>.from(json['dietaryRestrictions'] ?? []),
-      activityRestrictions: List<String>.from(json['activityRestrictions'] ?? []),
-      progressNotes: Map<String, dynamic>.from(json['progressNotes'] ?? {}),
-      complications: List<String>.from(json['complications'] ?? []),
-      requiresHospitalization: json['requiresHospitalization'] ?? false,
-      hospitalizationDetails: 
-          Map<String, dynamic>.from(json['hospitalizationDetails'] ?? {}),
-      referrals: List<String>.from(json['referrals'] ?? []),
-      prognosis: Map<String, dynamic>.from(json['prognosis'] ?? {}),
-      preventiveMeasures: List<String>.from(json['preventiveMeasures'] ?? []),
-      isSharedWithTeam: json['isSharedWithTeam'] ?? false,
+      cost: json['cost']?.toDouble(),
+      insuranceClaim: json['insuranceClaim'],
+      isEmergency: json['isEmergency'] ?? false,
+      followUpInstructions: json['followUpInstructions'],
+      createdBy: json['createdBy'],
+      createdAt: json['createdAt'] != null 
+          ? DateTime.parse(json['createdAt'])
+          : null,
+      isPremium: json['isPremium'] ?? false,
+      metadata: json['metadata'],
+      labResults: json['labResults'],
+      procedures: json['procedures'],
+      prescriptions: json['prescriptions'] != null 
+          ? List<String>.from(json['prescriptions'])
+          : null,
+      followUpDate: json['followUpDate'] != null 
+          ? DateTime.parse(json['followUpDate'])
+          : null,
+      diagnosticTests: json['diagnosticTests'],
+      status: RecordStatus.values.firstWhere(
+        (e) => e.toString() == json['status'],
+        orElse: () => RecordStatus.completed,
+      ),
     );
   }
 
-  // Helper methods
-  bool needsFollowUp() {
-    return followUpDate != null && 
-           DateTime.now().isBefore(followUpDate!);
-  }
+  bool needsFollowUp() => 
+      followUpDate != null && followUpDate!.isAfter(DateTime.now());
 
-  bool hasAbnormalLabResults() {
-    return labResults.values.any((result) => 
-        result['isAbnormal'] == true);
-  }
+  String getFormattedCost() => 
+      cost != null ? '\$${cost!.toStringAsFixed(2)}' : 'N/A';
 
-  List<String> getActiveRestrictions() {
-    return [...dietaryRestrictions, ...activityRestrictions];
-  }
+  bool hasSymptom(String symptom) => 
+      symptoms.contains(symptom.toLowerCase());
 
-  String getFormattedCost() {
-    return '\$${cost.toStringAsFixed(2)}';
-  }
+  bool hasMedication(String medication) => 
+      medications.contains(medication);
 
-  bool hasComplications() {
-    return complications.isNotEmpty;
-  }
+  bool hasVaccination(String vaccination) => 
+      vaccinations.contains(vaccination);
 
-  Map<String, dynamic> getVaccinationsDue() {
-    final due = <String, dynamic>{};
-    vaccinations.forEach((vaccine, details) {
-      if (details['nextDue'] != null) {
-        final nextDue = DateTime.parse(details['nextDue']);
-        if (DateTime.now().isAfter(nextDue)) {
-          due[vaccine] = details;
-        }
-      }
-    });
-    return due;
-  }
+  bool canEdit(String userId) => 
+      createdBy == userId || !isPremium;
+
+  bool get isRecent => 
+      date.isAfter(DateTime.now().subtract(const Duration(days: 7)));
+
+  bool get requiresAttention =>
+      isEmergency || status == RecordStatus.pending || needsFollowUp();
 }
 
-enum HealthRecordType {
-  routine,
-  emergency,
-  followUp,
-  surgery,
-  vaccination,
-  dental,
-  specialist,
-  laboratory,
-  imaging,
-  other
+enum RecordStatus {
+  pending,
+  inProgress,
+  completed,
+  cancelled,
+  followUpRequired
 }
 
-extension HealthRecordTypeExtension on HealthRecordType {
+extension RecordStatusExtension on RecordStatus {
   String get displayName {
     switch (this) {
-      case HealthRecordType.routine:
-        return 'Routine Check-up';
-      case HealthRecordType.emergency:
-        return 'Emergency Visit';
-      case HealthRecordType.followUp:
-        return 'Follow-up Visit';
-      case HealthRecordType.surgery:
-        return 'Surgery';
-      case HealthRecordType.vaccination:
-        return 'Vaccination';
-      case HealthRecordType.dental:
-        return 'Dental Care';
-      case HealthRecordType.specialist:
-        return 'Specialist Visit';
-      case HealthRecordType.laboratory:
-        return 'Laboratory Tests';
-      case HealthRecordType.imaging:
-        return 'Imaging';
-      case HealthRecordType.other:
-        return 'Other';
+      case RecordStatus.pending: return 'Pending';
+      case RecordStatus.inProgress: return 'In Progress';
+      case RecordStatus.completed: return 'Completed';
+      case RecordStatus.cancelled: return 'Cancelled';
+      case RecordStatus.followUpRequired: return 'Follow-up Required';
     }
   }
 }

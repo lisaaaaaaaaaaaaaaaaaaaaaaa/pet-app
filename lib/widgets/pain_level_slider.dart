@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-class PainLevelSlider extends StatefulWidget {
+class PainLevelSlider extends StatelessWidget {
   final double value;
   final ValueChanged<double> onChanged;
   final bool showLabels;
   final bool showEmojis;
   final bool showColors;
-  final bool enabled;
+  final double height;
+  final EdgeInsets padding;
   final String? title;
   final String? subtitle;
 
@@ -18,146 +19,151 @@ class PainLevelSlider extends StatefulWidget {
     this.showLabels = true,
     this.showEmojis = true,
     this.showColors = true,
-    this.enabled = true,
+    this.height = 120,
+    this.padding = const EdgeInsets.all(16),
     this.title,
     this.subtitle,
   }) : super(key: key);
 
   @override
-  State<PainLevelSlider> createState() => _PainLevelSliderState();
-}
-
-class _PainLevelSliderState extends State<PainLevelSlider> {
-  static const _minValue = 0.0;
-  static const _maxValue = 10.0;
-
-  Color get _activeColor {
-    if (widget.value <= 3) return AppTheme.success;
-    if (widget.value <= 6) return AppTheme.warning;
-    return AppTheme.error;
-  }
-
-  String get _painDescription {
-    if (widget.value <= 1) return 'No Pain';
-    if (widget.value <= 3) return 'Mild Pain';
-    if (widget.value <= 6) return 'Moderate Pain';
-    if (widget.value <= 8) return 'Severe Pain';
-    return 'Extreme Pain';
-  }
-
-  String get _emoji {
-    if (widget.value <= 1) return '😊';
-    if (widget.value <= 3) return '🙂';
-    if (widget.value <= 6) return '😐';
-    if (widget.value <= 8) return '😣';
-    return '😫';
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (widget.title != null) ...[
-          Text(
-            widget.title!,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppTheme.primaryGreen,
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 4),
-        ],
-        if (widget.subtitle != null) ...[
-          Text(
-            widget.subtitle!,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.neutralGrey,
-                ),
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (widget.showEmojis)
-          Center(
-            child: Text(
-              _emoji,
-              style: const TextStyle(fontSize: 40),
+    return Container(
+      height: height,
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title != null) ...[
+            Text(
+              title!,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimaryColor,
+              ),
             ),
-          ),
-        const SizedBox(height: 8),
-        Center(
-          child: Text(
-            _painDescription,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: _activeColor,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        SliderTheme(
-          data: SliderThemeData(
-            activeTrackColor: widget.showColors ? _activeColor : AppTheme.primaryGreen,
-            inactiveTrackColor: (widget.showColors ? _activeColor : AppTheme.primaryGreen).withOpacity(0.2),
-            thumbColor: widget.showColors ? _activeColor : AppTheme.primaryGreen,
-            overlayColor: (widget.showColors ? _activeColor : AppTheme.primaryGreen).withOpacity(0.1),
-            trackHeight: 8,
-            thumbShape: const _CustomSliderThumbShape(),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 24),
-            valueIndicatorShape: const PaddleSliderValueIndicatorShape(),
-            valueIndicatorColor: _activeColor,
-            valueIndicatorTextStyle: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
+            const SizedBox(height: 4),
+          ],
+          if (subtitle != null) ...[
+            Text(
+              subtitle!,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppTheme.textSecondaryColor,
+              ),
             ),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            children: [
+              if (showLabels)
+                const Text(
+                  '0',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textSecondaryColor,
+                  ),
+                ),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderThemeData(
+                    activeTrackColor: _getTrackColor(value),
+                    inactiveTrackColor:
+                        AppTheme.textSecondaryColor.withOpacity(0.2),
+                    thumbColor: _getTrackColor(value),
+                    overlayColor: _getTrackColor(value).withOpacity(0.2),
+                    trackHeight: 4,
+                    thumbShape: _CustomSliderThumbShape(
+                      showEmoji: showEmojis,
+                      painLevel: value,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 24,
+                    ),
+                  ),
+                  child: Slider(
+                    value: value,
+                    min: 0,
+                    max: 10,
+                    divisions: 10,
+                    onChanged: onChanged,
+                  ),
+                ),
+              ),
+              if (showLabels)
+                const Text(
+                  '10',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textSecondaryColor,
+                  ),
+                ),
+            ],
           ),
-          child: Slider(
-            value: widget.value,
-            min: _minValue,
-            max: _maxValue,
-            divisions: 10,
-            label: widget.value.toInt().toString(),
-            onChanged: widget.enabled ? widget.onChanged : null,
-          ),
-        ),
-        if (widget.showLabels)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
+          if (showLabels) ...[
+            const SizedBox(height: 8),
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'No Pain',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppTheme.neutralGrey,
-                      ),
-                ),
-                Text(
-                  'Extreme Pain',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppTheme.neutralGrey,
-                      ),
-                ),
+                _buildLabel('No Pain', Colors.green),
+                _buildLabel('Moderate', Colors.orange),
+                _buildLabel('Severe', Colors.red),
               ],
             ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text, Color color) {
+    return Row(
+      children: [
+        if (showColors) ...[
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
           ),
+          const SizedBox(width: 4),
+        ],
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppTheme.textSecondaryColor,
+          ),
+        ),
       ],
     );
+  }
+
+  Color _getTrackColor(double value) {
+    if (value <= 3) {
+      return Colors.green;
+    } else if (value <= 6) {
+      return Colors.orange;
+    } else {
+      return Colors.red;
+    }
   }
 }
 
 class _CustomSliderThumbShape extends SliderComponentShape {
-  final double enabledThumbRadius;
-  final double disabledThumbRadius;
+  final bool showEmoji;
+  final double painLevel;
 
   const _CustomSliderThumbShape({
-    this.enabledThumbRadius = 12,
-    this.disabledThumbRadius = 8,
+    required this.showEmoji,
+    required this.painLevel,
   });
 
   @override
   Size getPreferredSize(bool isEnabled, bool isDiscrete) {
-    return Size.fromRadius(isEnabled ? enabledThumbRadius : disabledThumbRadius);
+    return const Size(20, 20);
   }
 
   @override
@@ -177,34 +183,47 @@ class _CustomSliderThumbShape extends SliderComponentShape {
   }) {
     final Canvas canvas = context.canvas;
 
+    // Draw thumb circle
     final paint = Paint()
       ..color = sliderTheme.thumbColor!
       ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 10, paint);
 
+    // Draw border
     final borderPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
+    canvas.drawCircle(center, 9, borderPaint);
 
-    canvas.drawCircle(
-      center,
-      enabledThumbRadius,
-      paint,
-    );
-
-    canvas.drawCircle(
-      center,
-      enabledThumbRadius,
-      borderPaint,
-    );
+    if (showEmoji) {
+      final emoji = _getEmoji(painLevel);
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: emoji,
+          style: const TextStyle(
+            fontSize: 12,
+            height: 1,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(
+          center.dx - textPainter.width / 2,
+          center.dy - textPainter.height / 2,
+        ),
+      );
+    }
   }
-}
 
-// Helper class for predefined pain levels
-class PainLevel {
-  static const none = 0.0;
-  static const mild = 2.0;
-  static const moderate = 5.0;
-  static const severe = 7.0;
-  static const extreme = 10.0;
+  String _getEmoji(double value) {
+    if (value <= 2) return '😊';
+    if (value <= 4) return '🙂';
+    if (value <= 6) return '😐';
+    if (value <= 8) return '😣';
+    return '😫';
+  }
 }

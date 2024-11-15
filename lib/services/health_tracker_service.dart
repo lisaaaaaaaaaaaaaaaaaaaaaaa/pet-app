@@ -1,29 +1,49 @@
-// lib/services/health_tracker_service.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'core/base_service.dart';
 import '../models/health_record.dart';
 import '../models/weight_record.dart';
 import '../models/medication.dart';
 import '../models/symptom_record.dart';
+import '../models/vital_signs.dart';
+import '../utils/exceptions.dart';
 
-class HealthTrackerService {
+class HealthTrackerService extends BaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  // Singleton pattern
+  
   static final HealthTrackerService _instance = HealthTrackerService._internal();
   factory HealthTrackerService() => _instance;
   HealthTrackerService._internal();
 
-  // Collection references
+  // Collection References
   CollectionReference get _usersRef => _firestore.collection('users');
-
-  // Get pet's health collection reference
   CollectionReference _petHealthRef(String userId, String petId) =>
       _usersRef.doc(userId).collection('pets').doc(petId).collection('health');
 
-  // HEALTH RECORDS
+  // Health Records
+  Future<void> addHealthRecord(String userId, String petId, HealthRecord record) async {
+    try {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petHealthRef(userId, petId)
+            .doc('records')
+            .collection('general')
+            .doc(record.id)
+            .set(record.toJson());
+            
+        await _updateLatestMetrics(userId, petId, record);
+        logger.i('Added health record: ${record.id}');
+        analytics.logEvent('health_record_added');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error adding health record', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw HealthTrackerException('Error adding health record: $e');
+    }
+  }
 
-  Stream<List<HealthRecord>> getPetHealthRecords(
+  Stream<List<HealthRecord>> streamHealthRecords(
     String userId,
     String petId, {
     DateTime? startDate,
@@ -48,275 +68,224 @@ class HealthTrackerService {
       return query.snapshots().map((snapshot) => snapshot.docs
           .map((doc) => HealthRecord.fromJson(doc.data()))
           .toList());
-    } catch (e) {
-      throw HealthTrackerException('Error getting health records: $e');
+    } catch (e, stackTrace) {
+      logger.e('Error streaming health records', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw HealthTrackerException('Error streaming health records: $e');
     }
   }
 
-  Future<void> addHealthRecord(
-    String userId,
-    String petId,
-    HealthRecord record,
-  ) async {
+  // Weight Tracking
+  Future<void> addWeightRecord(String userId, String petId, WeightRecord record) async {
     try {
-      await _petHealthRef(userId, petId)
-          .doc('records')
-          .collection('general')
-          .doc(record.id)
-          .set(record.toJson());
-
-      // Update latest metrics
-      await _updateLatestMetrics(userId, petId, record);
-    } catch (e) {
-      throw HealthTrackerException('Error adding health record: $e');
-    }
-  }
-
-  Future<void> updateHealthRecord(
-    String userId,
-    String petId,
-    HealthRecord record,
-  ) async {
-    try {
-      await _petHealthRef(userId, petId)
-          .doc('records')
-          .collection('general')
-          .doc(record.id)
-          .update(record.toJson());
-
-      // Update latest metrics
-      await _updateLatestMetrics(userId, petId, record);
-    } catch (e) {
-      throw HealthTrackerException('Error updating health record: $e');
-    }
-  }
-
-  Future<void> deleteHealthRecord(
-    String userId,
-    String petId,
-    String recordId,
-  ) async {
-    try {
-      await _petHealthRef(userId, petId)
-          .doc('records')
-          .collection('general')
-          .doc(recordId)
-          .delete();
-    } catch (e) {
-      throw HealthTrackerException('Error deleting health record: $e');
-    }
-  }
-
-  // WEIGHT TRACKING
-
-  Stream<List<WeightRecord>> getPetWeightRecords(
-    String userId,
-    String petId, {
-    int? limit,
-  }) {
-    try {
-      var query = _petHealthRef(userId, petId)
-          .doc('records')
-          .collection('weight')
-          .orderBy('date', descending: true);
-
-      if (limit != null) {
-        query = query.limit(limit);
-      }
-
-      return query.snapshots().map((snapshot) => snapshot.docs
-          .map((doc) => WeightRecord.fromJson(doc.data()))
-          .toList());
-    } catch (e) {
-      throw HealthTrackerException('Error getting weight records: $e');
-    }
-  }
-
-  Future<void> addWeightRecord(
-    String userId,
-    String petId,
-    WeightRecord record,
-  ) async {
-    try {
-      await _petHealthRef(userId, petId)
-          .doc('records')
-          .collection('weight')
-          .doc(record.id)
-          .set(record.toJson());
-
-      // Update latest weight in pet profile
-      await _updateLatestWeight(userId, petId, record);
-    } catch (e) {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petHealthRef(userId, petId)
+            .doc('weight')
+            .collection('records')
+            .doc(record.id)
+            .set(record.toJson());
+            
+        await _updateWeightMetrics(userId, petId, record);
+        logger.i('Added weight record: ${record.id}');
+        analytics.logEvent('weight_record_added');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error adding weight record', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
       throw HealthTrackerException('Error adding weight record: $e');
     }
   }
 
-  // MEDICATIONS
-
-  Stream<List<Medication>> getPetMedications(
-    String userId,
-    String petId, {
-    bool activeOnly = true,
-  }) {
-    try {
-      var query = _petHealthRef(userId, petId)
-          .doc('medications')
-          .collection('list')
-          .orderBy('startDate', descending: true);
-
-      if (activeOnly) {
-        query = query.where('isActive', isEqualTo: true);
-      }
-
-      return query.snapshots().map((snapshot) => snapshot.docs
-          .map((doc) => Medication.fromJson(doc.data()))
-          .toList());
-    } catch (e) {
-      throw HealthTrackerException('Error getting medications: $e');
-    }
-  }
-
-  Future<void> addMedication(
-    String userId,
-    String petId,
-    Medication medication,
-  ) async {
-    try {
-      await _petHealthRef(userId, petId)
-          .doc('medications')
-          .collection('list')
-          .doc(medication.id)
-          .set(medication.toJson());
-    } catch (e) {
-      throw HealthTrackerException('Error adding medication: $e');
-    }
-  }
-
-  Future<void> updateMedication(
-    String userId,
-    String petId,
-    Medication medication,
-  ) async {
-    try {
-      await _petHealthRef(userId, petId)
-          .doc('medications')
-          .collection('list')
-          .doc(medication.id)
-          .update(medication.toJson());
-    } catch (e) {
-      throw HealthTrackerException('Error updating medication: $e');
-    }
-  }
-
-  Future<void> deleteMedication(
-    String userId,
-    String petId,
-    String medicationId,
-  ) async {
-    try {
-      await _petHealthRef(userId, petId)
-          .doc('medications')
-          .collection('list')
-          .doc(medicationId)
-          .delete();
-    } catch (e) {
-      throw HealthTrackerException('Error deleting medication: $e');
-    }
-  }
-
-  // SYMPTOMS TRACKING
-
-  Stream<List<SymptomRecord>> getPetSymptoms(
+  Future<List<WeightRecord>> getWeightHistory(
     String userId,
     String petId, {
     DateTime? startDate,
     DateTime? endDate,
-  }) {
+    int? limit,
+  }) async {
     try {
-      var query = _petHealthRef(userId, petId)
-          .doc('symptoms')
-          .collection('records')
-          .orderBy('date', descending: true);
+      await checkConnectivity();
+      
+      return await withCache(
+        key: 'weight_history_${userId}_$petId',
+        duration: const Duration(hours: 1),
+        fetchData: () async {
+          var query = _petHealthRef(userId, petId)
+              .doc('weight')
+              .collection('records')
+              .orderBy('date', descending: true);
 
-      if (startDate != null) {
-        query = query.where('date',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
-      }
+          if (startDate != null) {
+            query = query.where('date',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
+          }
 
-      if (endDate != null) {
-        query = query.where('date',
-            isLessThanOrEqualTo: Timestamp.fromDate(endDate));
-      }
+          if (endDate != null) {
+            query = query.where('date',
+                isLessThanOrEqualTo: Timestamp.fromDate(endDate));
+          }
 
-      return query.snapshots().map((snapshot) => snapshot.docs
-          .map((doc) => SymptomRecord.fromJson(doc.data()))
-          .toList());
-    } catch (e) {
-      throw HealthTrackerException('Error getting symptoms: $e');
+          if (limit != null) {
+            query = query.limit(limit);
+          }
+
+          final snapshot = await query.get();
+          return snapshot.docs
+              .map((doc) => WeightRecord.fromJson(doc.data()))
+              .toList();
+        },
+      );
+    } catch (e, stackTrace) {
+      logger.e('Error getting weight history', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw HealthTrackerException('Error getting weight history: $e');
     }
   }
 
-  Future<void> addSymptomRecord(
-    String userId,
-    String petId,
-    SymptomRecord record,
-  ) async {
+  // Medication Tracking
+  Future<void> addMedication(String userId, String petId, Medication medication) async {
     try {
-      await _petHealthRef(userId, petId)
-          .doc('symptoms')
-          .collection('records')
-          .doc(record.id)
-          .set(record.toJson());
-    } catch (e) {
-      throw HealthTrackerException('Error adding symptom record: $e');
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petHealthRef(userId, petId)
+            .doc('medications')
+            .collection('active')
+            .doc(medication.id)
+            .set(medication.toJson());
+            
+        logger.i('Added medication: ${medication.id}');
+        analytics.logEvent('medication_added');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error adding medication', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw HealthTrackerException('Error adding medication: $e');
     }
   }
 
-  // HEALTH METRICS AND ANALYTICS
+  Future<List<Medication>> getActiveMedications(String userId, String petId) async {
+    try {
+      await checkConnectivity();
+      
+      return await withCache(
+        key: 'active_medications_${userId}_$petId',
+        duration: const Duration(minutes: 30),
+        fetchData: () async {
+          final snapshot = await _petHealthRef(userId, petId)
+              .doc('medications')
+              .collection('active')
+              .where('endDate', isGreaterThanOrEqualTo: Timestamp.now())
+              .get();
+              
+          return snapshot.docs
+              .map((doc) => Medication.fromJson(doc.data()))
+              .toList();
+        },
+      );
+    } catch (e, stackTrace) {
+      logger.e('Error getting active medications', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw HealthTrackerException('Error getting active medications: $e');
+    }
+  }
 
-  Future<Map<String, dynamic>> getHealthMetrics(
+  // Symptom Tracking
+  Future<void> recordSymptom(String userId, String petId, SymptomRecord symptom) async {
+    try {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petHealthRef(userId, petId)
+            .doc('symptoms')
+            .collection('records')
+            .doc(symptom.id)
+            .set(symptom.toJson());
+            
+        logger.i('Recorded symptom: ${symptom.id}');
+        analytics.logEvent('symptom_recorded');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error recording symptom', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw HealthTrackerException('Error recording symptom: $e');
+    }
+  }
+
+  Stream<List<SymptomRecord>> streamRecentSymptoms(String userId, String petId) {
+    try {
+      return _petHealthRef(userId, petId)
+          .doc('symptoms')
+          .collection('records')
+          .orderBy('timestamp', descending: true)
+          .limit(10)
+          .snapshots()
+          .map((snapshot) => snapshot.docs
+              .map((doc) => SymptomRecord.fromJson(doc.data()))
+              .toList());
+    } catch (e, stackTrace) {
+      logger.e('Error streaming symptoms', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw HealthTrackerException('Error streaming symptoms: $e');
+    }
+  }
+
+  // Vital Signs
+  Future<void> recordVitalSigns(String userId, String petId, VitalSigns vitals) async {
+    try {
+      await checkConnectivity();
+      
+      await withRetry(() async {
+        await _petHealthRef(userId, petId)
+            .doc('vitals')
+            .collection('records')
+            .doc(vitals.id)
+            .set(vitals.toJson());
+            
+        await _updateVitalMetrics(userId, petId, vitals);
+        logger.i('Recorded vital signs: ${vitals.id}');
+        analytics.logEvent('vitals_recorded');
+      });
+    } catch (e, stackTrace) {
+      logger.e('Error recording vital signs', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw HealthTrackerException('Error recording vital signs: $e');
+    }
+  }
+
+  // Health Analytics
+  Future<Map<String, dynamic>> getHealthAnalytics(
     String userId,
     String petId, {
     DateTime? startDate,
     DateTime? endDate,
   }) async {
     try {
-      final healthRecords = await getPetHealthRecords(
-        userId,
-        petId,
-        startDate: startDate,
-        endDate: endDate,
-      ).first;
-
-      final weightRecords = await getPetWeightRecords(userId, petId).first;
-      final medications = await getPetMedications(userId, petId).first;
-      final symptoms = await getPetSymptoms(
-        userId,
-        petId,
-        startDate: startDate,
-        endDate: endDate,
-      ).first;
-
-      // Calculate metrics
-      return {
-        'totalRecords': healthRecords.length,
+      await checkConnectivity();
+      
+      final weightRecords = await getWeightHistory(userId, petId, 
+          startDate: startDate, endDate: endDate);
+      final medications = await getActiveMedications(userId, petId);
+      
+      // Calculate analytics
+      final analytics = {
         'weightTrend': _calculateWeightTrend(weightRecords),
         'activeMedications': medications.length,
-        'commonSymptoms': _getCommonSymptoms(symptoms),
-        'lastCheckup': healthRecords.isNotEmpty ? healthRecords.first.date : null,
-        'healthScore': _calculateHealthScore(
-          healthRecords,
-          symptoms,
-          medications,
-        ),
+        'lastCheckup': await _getLastCheckupDate(userId, petId),
+        'healthScore': await _calculateHealthScore(userId, petId),
       };
-    } catch (e) {
-      throw HealthTrackerException('Error calculating health metrics: $e');
+      
+      return analytics;
+    } catch (e, stackTrace) {
+      logger.e('Error getting health analytics', e, stackTrace);
+      FirebaseCrashlytics.instance.recordError(e, stackTrace);
+      throw HealthTrackerException('Error getting health analytics: $e');
     }
   }
 
   // Helper Methods
-
   Future<void> _updateLatestMetrics(
     String userId,
     String petId,
@@ -325,107 +294,89 @@ class HealthTrackerService {
     try {
       await _petHealthRef(userId, petId).doc('metrics').set({
         'lastCheckup': record.date,
-        'lastVetVisit': record.vetVisit,
-        'lastUpdated': FieldValue.serverTimestamp(),
+        'lastCondition': record.condition,
+        'lastNotes': record.notes,
       }, SetOptions(merge: true));
     } catch (e) {
-      throw HealthTrackerException('Error updating latest metrics: $e');
+      logger.e('Error updating latest metrics', e);
     }
   }
 
-  Future<void> _updateLatestWeight(
+  Future<void> _updateWeightMetrics(
     String userId,
     String petId,
     WeightRecord record,
   ) async {
     try {
-      await _usersRef
-          .doc(userId)
-          .collection('pets')
-          .doc(petId)
-          .update({'currentWeight': record.weight});
+      await _petHealthRef(userId, petId).doc('metrics').set({
+        'lastWeight': record.weight,
+        'lastWeightDate': record.date,
+        'weightUnit': record.unit,
+      }, SetOptions(merge: true));
     } catch (e) {
-      throw HealthTrackerException('Error updating latest weight: $e');
+      logger.e('Error updating weight metrics', e);
     }
   }
 
-  Map<String, double> _calculateWeightTrend(List<WeightRecord> records) {
-    if (records.length < 2) return {};
-
-    final sorted = List<WeightRecord>.from(records)
-      ..sort((a, b) => a.date.compareTo(b.date));
-
-    double totalChange = 0;
-    double monthlyChange = 0;
-
-    if (sorted.length >= 2) {
-      totalChange =
-          sorted.last.weight - sorted.first.weight;
-      
-      final lastMonth = sorted.where((record) =>
-          record.date.isAfter(DateTime.now().subtract(const Duration(days: 30))));
-      
-      if (lastMonth.length >= 2) {
-        monthlyChange = lastMonth.last.weight - lastMonth.first.weight;
-      }
+  Future<void> _updateVitalMetrics(
+    String userId,
+    String petId,
+    VitalSigns vitals,
+  ) async {
+    try {
+      await _petHealthRef(userId, petId).doc('metrics').set({
+        'lastVitals': vitals.toJson(),
+        'lastVitalsDate': vitals.timestamp,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      logger.e('Error updating vital metrics', e);
     }
+  }
 
+  Map<String, dynamic> _calculateWeightTrend(List<WeightRecord> records) {
+    if (records.isEmpty) return {'trend': 'stable', 'change': 0.0};
+    
+    final latest = records.first.weight;
+    final oldest = records.last.weight;
+    final change = latest - oldest;
+    
+    String trend;
+    if (change > 0.5) {
+      trend = 'increasing';
+    } else if (change < -0.5) {
+      trend = 'decreasing';
+    } else {
+      trend = 'stable';
+    }
+    
     return {
-      'totalChange': totalChange,
-      'monthlyChange': monthlyChange,
+      'trend': trend,
+      'change': change,
     };
   }
 
-  List<Map<String, dynamic>> _getCommonSymptoms(List<SymptomRecord> symptoms) {
-    final Map<String, int> symptomCount = {};
-
-    for (var record in symptoms) {
-      for (var symptom in record.symptoms) {
-        symptomCount[symptom] = (symptomCount[symptom] ?? 0) + 1;
-      }
-    }
-
-    final sortedSymptoms = symptomCount.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return sortedSymptoms
-        .take(5)
-        .map((e) => {
-              'symptom': e.key,
-              'count': e.value,
-            })
-        .toList();
+  Future<DateTime?> _getLastCheckupDate(String userId, String petId) async {
+    final snapshot = await _petHealthRef(userId, petId)
+        .doc('records')
+        .collection('general')
+        .orderBy('date', descending: true)
+        .limit(1)
+        .get();
+        
+    if (snapshot.docs.isEmpty) return null;
+    return (snapshot.docs.first.data()['date'] as Timestamp).toDate();
   }
 
-  double _calculateHealthScore(
-    List<HealthRecord> healthRecords,
-    List<SymptomRecord> symptoms,
-    List<Medication> medications,
-  ) {
-    double score = 100;
-
-    // Deduct points for recent symptoms
-    final recentSymptoms = symptoms
-        .where((s) => s.date
-            .isAfter(DateTime.now().subtract(const Duration(days: 30))))
-        .length;
-    score -= recentSymptoms * 2;
-
-    // Deduct points for active medications
-    final activeMeds = medications.where((m) => m.isActive).length;
-    score -= activeMeds * 5;
-
-    // Add points for regular checkups
-    if (healthRecords.isNotEmpty) {
-      final lastCheckup = healthRecords.first.date;
-      final daysSinceCheckup =
-          DateTime.now().difference(lastCheckup).inDays;
-      if (daysSinceCheckup <= 180) {
-        score += 10;
-      }
-    }
-
-    return score.clamp(0, 100);
+  Future<int> _calculateHealthScore(String userId, String petId) async {
+    // Implement health score calculation logic
+    // This could be based on various factors like:
+    // - Recent vital signs
+    // - Weight trends
+    // - Medication adherence
+    // - Symptom frequency
+    // - Exercise records
+    // Returns a score from 0-100
+    return 85; // Placeholder implementation
   }
 }
 

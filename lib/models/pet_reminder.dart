@@ -1,278 +1,242 @@
-// lib/models/pet_reminder.dart
-
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PetReminder {
   final String id;
   final String petId;
   final String title;
-  final String type;
+  final String description;
   final DateTime dueDate;
-  final ReminderFrequency frequency;
-  final String? notes;
+  final String type;
   final bool isRecurring;
-  final Map<String, dynamic>? recurringDetails;
-  final List<String> assignedTo;
+  final String? frequency;
   final bool isCompleted;
-  final DateTime createdAt;
-  final DateTime? completedAt;
-  final String createdBy;
-  final String? completedBy;
-  final ReminderPriority priority;
-  final bool hasNotification;
-  final List<DateTime>? notificationTimes;
-  final Map<String, dynamic>? customData;
-  // New premium features
-  final String category;
-  final Map<String, dynamic> schedule;
-  final List<String> attachments;
-  final Map<String, dynamic> linkedRecords;
+  final String? notes;
+  final int priority;
   final List<String> tags;
-  final Map<String, dynamic> completionRequirements;
-  final List<String> dependencies;
-  final Map<String, dynamic> progressTracking;
+  // Enhanced fields
+  final String? createdBy;
+  final DateTime createdAt;
+  final bool isPremium;
+  final Map<String, dynamic>? metadata;
+  final DateTime? lastCompleted;
+  final Map<String, dynamic>? recurringDetails;
+  final List<String>? attachments;
+  final Map<String, dynamic>? notificationSettings;
+  final List<String>? assignedTo;
+  final ReminderStatus status;
+  final Map<String, dynamic>? completionHistory;
+  final String? category;
+  final Map<String, dynamic>? customFields;
   final bool requiresVerification;
-  final Map<String, dynamic>? verificationDetails;
-  final List<String> skipDates;
-  final Map<String, dynamic> customNotifications;
-  final Map<String, dynamic> reminderHistory;
-  final bool isTemplate;
-  final String? templateId;
-  final Map<String, dynamic> locationDetails;
-  final Map<String, dynamic> weatherDependency;
-  final Map<String, dynamic> costs;
-  final List<String> relatedReminders;
-  final Map<String, dynamic> compliance;
-  final Map<String, dynamic> escalation;
-  final bool requiresPhoto;
-  final bool requiresNote;
-  final List<String> alternativeSchedules;
-  final Map<String, dynamic> metrics;
 
   PetReminder({
     required this.id,
     required this.petId,
     required this.title,
-    required this.type,
+    required this.description,
     required this.dueDate,
-    required this.frequency,
-    this.notes,
+    required this.type,
     this.isRecurring = false,
-    this.recurringDetails,
-    this.assignedTo = const [],
+    this.frequency,
     this.isCompleted = false,
-    required this.createdAt,
-    this.completedAt,
-    required this.createdBy,
-    this.completedBy,
-    this.priority = ReminderPriority.medium,
-    this.hasNotification = true,
-    this.notificationTimes,
-    this.customData,
-    // New premium features
-    this.category = 'general',
-    this.schedule = const {},
-    this.attachments = const [],
-    this.linkedRecords = const {},
+    this.notes,
+    this.priority = 1,
     this.tags = const [],
-    this.completionRequirements = const {},
-    this.dependencies = const [],
-    this.progressTracking = const {},
+    this.createdBy,
+    DateTime? createdAt,
+    this.isPremium = false,
+    this.metadata,
+    this.lastCompleted,
+    this.recurringDetails,
+    this.attachments,
+    this.notificationSettings,
+    this.assignedTo,
+    this.status = ReminderStatus.pending,
+    this.completionHistory,
+    this.category,
+    this.customFields,
     this.requiresVerification = false,
-    this.verificationDetails,
-    this.skipDates = const [],
-    this.customNotifications = const {},
-    this.reminderHistory = const {},
-    this.isTemplate = false,
-    this.templateId,
-    this.locationDetails = const {},
-    this.weatherDependency = const {},
-    this.costs = const {},
-    this.relatedReminders = const [],
-    this.compliance = const {},
-    this.escalation = const {},
-    this.requiresPhoto = false,
-    this.requiresNote = false,
-    this.alternativeSchedules = const [],
-    this.metrics = const {},
-  });
-
-  // Existing methods remain the same...
+  }) : this.createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {
-      // Existing fields...
-      'category': category,
-      'schedule': schedule,
-      'attachments': attachments,
-      'linkedRecords': linkedRecords,
+      'id': id,
+      'petId': petId,
+      'title': title,
+      'description': description,
+      'dueDate': dueDate.toIso8601String(),
+      'type': type,
+      'isRecurring': isRecurring,
+      'frequency': frequency,
+      'isCompleted': isCompleted,
+      'notes': notes,
+      'priority': priority,
       'tags': tags,
-      'completionRequirements': completionRequirements,
-      'dependencies': dependencies,
-      'progressTracking': progressTracking,
+      'createdBy': createdBy,
+      'createdAt': createdAt.toIso8601String(),
+      'isPremium': isPremium,
+      'metadata': metadata,
+      'lastCompleted': lastCompleted?.toIso8601String(),
+      'recurringDetails': recurringDetails,
+      'attachments': attachments,
+      'notificationSettings': notificationSettings,
+      'assignedTo': assignedTo,
+      'status': status.toString(),
+      'completionHistory': completionHistory,
+      'category': category,
+      'customFields': customFields,
       'requiresVerification': requiresVerification,
-      'verificationDetails': verificationDetails,
-      'skipDates': skipDates,
-      'customNotifications': customNotifications,
-      'reminderHistory': reminderHistory,
-      'isTemplate': isTemplate,
-      'templateId': templateId,
-      'locationDetails': locationDetails,
-      'weatherDependency': weatherDependency,
-      'costs': costs,
-      'relatedReminders': relatedReminders,
-      'compliance': compliance,
-      'escalation': escalation,
-      'requiresPhoto': requiresPhoto,
-      'requiresNote': requiresNote,
-      'alternativeSchedules': alternativeSchedules,
-      'metrics': metrics,
     };
   }
 
   factory PetReminder.fromJson(Map<String, dynamic> json) {
     return PetReminder(
-      // Existing fields...
-      category: json['category'] ?? 'general',
-      schedule: Map<String, dynamic>.from(json['schedule'] ?? {}),
-      attachments: List<String>.from(json['attachments'] ?? []),
-      linkedRecords: Map<String, dynamic>.from(json['linkedRecords'] ?? {}),
+      id: json['id'],
+      petId: json['petId'],
+      title: json['title'],
+      description: json['description'],
+      dueDate: DateTime.parse(json['dueDate']),
+      type: json['type'],
+      isRecurring: json['isRecurring'] ?? false,
+      frequency: json['frequency'],
+      isCompleted: json['isCompleted'] ?? false,
+      notes: json['notes'],
+      priority: json['priority'] ?? 1,
       tags: List<String>.from(json['tags'] ?? []),
-      completionRequirements: 
-          Map<String, dynamic>.from(json['completionRequirements'] ?? {}),
-      dependencies: List<String>.from(json['dependencies'] ?? []),
-      progressTracking: Map<String, dynamic>.from(json['progressTracking'] ?? {}),
+      createdBy: json['createdBy'],
+      createdAt: json['createdAt'] != null 
+          ? DateTime.parse(json['createdAt'])
+          : null,
+      isPremium: json['isPremium'] ?? false,
+      metadata: json['metadata'],
+      lastCompleted: json['lastCompleted'] != null 
+          ? DateTime.parse(json['lastCompleted'])
+          : null,
+      recurringDetails: json['recurringDetails'],
+      attachments: json['attachments'] != null 
+          ? List<String>.from(json['attachments'])
+          : null,
+      notificationSettings: json['notificationSettings'],
+      assignedTo: json['assignedTo'] != null 
+          ? List<String>.from(json['assignedTo'])
+          : null,
+      status: ReminderStatus.values.firstWhere(
+        (e) => e.toString() == json['status'],
+        orElse: () => ReminderStatus.pending,
+      ),
+      completionHistory: json['completionHistory'],
+      category: json['category'],
+      customFields: json['customFields'],
       requiresVerification: json['requiresVerification'] ?? false,
-      verificationDetails: json['verificationDetails'],
-      skipDates: List<String>.from(json['skipDates'] ?? []),
-      customNotifications: 
-          Map<String, dynamic>.from(json['customNotifications'] ?? {}),
-      reminderHistory: Map<String, dynamic>.from(json['reminderHistory'] ?? {}),
-      isTemplate: json['isTemplate'] ?? false,
-      templateId: json['templateId'],
-      locationDetails: Map<String, dynamic>.from(json['locationDetails'] ?? {}),
-      weatherDependency: Map<String, dynamic>.from(json['weatherDependency'] ?? {}),
-      costs: Map<String, dynamic>.from(json['costs'] ?? {}),
-      relatedReminders: List<String>.from(json['relatedReminders'] ?? []),
-      compliance: Map<String, dynamic>.from(json['compliance'] ?? {}),
-      escalation: Map<String, dynamic>.from(json['escalation'] ?? {}),
-      requiresPhoto: json['requiresPhoto'] ?? false,
-      requiresNote: json['requiresNote'] ?? false,
-      alternativeSchedules: List<String>.from(json['alternativeSchedules'] ?? []),
-      metrics: Map<String, dynamic>.from(json['metrics'] ?? {}),
     );
   }
 
-  // Additional helper methods
-  bool canComplete() {
-    if (completionRequirements.isEmpty) return true;
-    return completionRequirements.entries
-        .every((requirement) => requirement.value['met'] == true);
+  bool isOverdue() => 
+      !isCompleted && dueDate.isBefore(DateTime.now());
+
+  bool isDueSoon() {
+    final now = DateTime.now();
+    return !isCompleted && 
+           dueDate.isAfter(now) && 
+           dueDate.isBefore(now.add(const Duration(days: 1)));
   }
 
-  bool isBlocked() {
-    return dependencies.isNotEmpty && 
-           dependencies.any((depId) => 
-               !reminderHistory[depId]?['completed'] ?? true);
+  DateTime? getNextDueDate() {
+    if (!isRecurring || frequency == null) return null;
+    
+    final lastDate = lastCompleted ?? dueDate;
+    switch (frequency) {
+      case 'daily':
+        return lastDate.add(const Duration(days: 1));
+      case 'weekly':
+        return lastDate.add(const Duration(days: 7));
+      case 'monthly':
+        return DateTime(lastDate.year, lastDate.month + 1, lastDate.day);
+      case 'yearly':
+        return DateTime(lastDate.year + 1, lastDate.month, lastDate.day);
+      default:
+        return null;
+    }
   }
 
-  bool shouldSkip() {
-    return skipDates.contains(dueDate.toIso8601String()) ||
-           (weatherDependency.isNotEmpty && 
-            !_isWeatherSuitable(weatherDependency));
+  bool hasTag(String tag) => tags.contains(tag.toLowerCase());
+
+  bool isAssignedTo(String userId) => 
+      assignedTo?.contains(userId) ?? false;
+
+  bool canEdit(String userId) => createdBy == userId || !isPremium;
+
+  String getPriorityLabel() {
+    if (priority >= 4) return 'High';
+    if (priority >= 2) return 'Medium';
+    return 'Low';
   }
 
-  bool needsEscalation() {
-    if (escalation.isEmpty) return false;
-    final threshold = Duration(
-        hours: escalation['thresholdHours'] ?? 24);
-    return isOverdue() && 
-           DateTime.now().difference(dueDate) > threshold;
-  }
-
-  bool isCompliant() {
-    if (compliance.isEmpty) return true;
-    final completionRate = compliance['completionRate'] ?? 0.0;
-    final threshold = compliance['threshold'] ?? 0.8;
-    return completionRate >= threshold;
-  }
-
-  List<DateTime> getAlternativeSchedule() {
-    if (alternativeSchedules.isEmpty) return [];
-    return alternativeSchedules
-        .map((dateStr) => DateTime.parse(dateStr))
-        .where((date) => date.isAfter(DateTime.now()))
-        .toList();
-  }
-
-  Map<String, dynamic> getMetrics() {
+  Map<String, dynamic> getNotificationConfig() {
+    if (notificationSettings == null) return {};
+    
     return {
-      'completionRate': _calculateCompletionRate(),
-      'averageDelay': _calculateAverageDelay(),
-      'complianceScore': _calculateComplianceScore(),
+      'enabled': notificationSettings!['enabled'] ?? true,
+      'advance': notificationSettings!['advance'] ?? 30,
+      'repeat': notificationSettings!['repeat'] ?? false,
+      'channels': notificationSettings!['channels'] ?? ['app'],
     };
   }
 
-  bool _isWeatherSuitable(Map<String, dynamic> conditions) {
-    // Implementation depends on weather service integration
-    return true;
+  List<Map<String, dynamic>> getCompletionHistoryList() {
+    if (completionHistory == null) return [];
+    
+    return completionHistory!.entries.map((entry) {
+      final completion = entry.value as Map<String, dynamic>;
+      return {
+        'date': DateTime.parse(entry.key),
+        'completedBy': completion['completedBy'],
+        'notes': completion['notes'],
+        'verified': completion['verified'] ?? false,
+      };
+    }).toList()
+      ..sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
   }
 
-  double _calculateCompletionRate() {
-    if (reminderHistory.isEmpty) return 1.0;
-    final completed = reminderHistory.values
-        .where((history) => history['completed'] == true)
-        .length;
-    return completed / reminderHistory.length;
-  }
+  bool requiresAttention() =>
+      isOverdue() || 
+      (priority >= 3 && !isCompleted) || 
+      (requiresVerification && status == ReminderStatus.completed && !isCompleted);
 
-  Duration _calculateAverageDelay() {
-    if (reminderHistory.isEmpty) return Duration.zero;
-    final delays = reminderHistory.values
-        .map((history) => DateTime.parse(history['completedAt'])
-            .difference(DateTime.parse(history['dueDate'])))
-        .toList();
-    final totalDelay = delays.fold(
-        Duration.zero, (prev, delay) => prev + delay);
-    return Duration(
-        microseconds: totalDelay.inMicroseconds ~/ delays.length);
-  }
-
-  double _calculateComplianceScore() {
-    final completionRate = _calculateCompletionRate();
-    final averageDelay = _calculateAverageDelay();
-    final maxDelay = Duration(days: 7);
-    final delayFactor = 1 - (averageDelay.inHours / maxDelay.inHours);
-    return (completionRate + delayFactor) / 2;
+  double getCompletionRate() {
+    if (!isRecurring || completionHistory == null) return isCompleted ? 1.0 : 0.0;
+    
+    final totalDue = recurringDetails?['totalOccurrences'] ?? 0;
+    if (totalDue == 0) return 0.0;
+    
+    return completionHistory!.length / totalDue;
   }
 }
 
-// Existing enums remain the same...
-
-enum ReminderCategory {
-  health,
-  care,
-  training,
-  social,
-  administrative,
-  other
-}
-
-enum CompletionStatus {
+enum ReminderStatus {
   pending,
+  inProgress,
   completed,
-  verified,
   skipped,
-  failed,
-  blocked
+  cancelled,
+  needsVerification
 }
 
-enum WeatherCondition {
-  any,
-  sunny,
-  cloudy,
-  rainy,
-  snowy,
-  windy,
-  extreme
+extension ReminderStatusExtension on ReminderStatus {
+  String get displayName {
+    switch (this) {
+      case ReminderStatus.pending: return 'Pending';
+      case ReminderStatus.inProgress: return 'In Progress';
+      case ReminderStatus.completed: return 'Completed';
+      case ReminderStatus.skipped: return 'Skipped';
+      case ReminderStatus.cancelled: return 'Cancelled';
+      case ReminderStatus.needsVerification: return 'Needs Verification';
+    }
+  }
+
+  bool get isActive => 
+      this == ReminderStatus.pending || 
+      this == ReminderStatus.inProgress || 
+      this == ReminderStatus.needsVerification;
 }

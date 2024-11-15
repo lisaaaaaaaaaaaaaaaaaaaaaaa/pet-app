@@ -2,274 +2,183 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 class CustomButton extends StatelessWidget {
-  final String? text;
-  final Widget? child;
+  final String text;
   final VoidCallback? onPressed;
-  final ButtonStyle? style;
-  final bool isLoading;
-  final bool isOutlined;
-  final bool isText;
-  final IconData? icon;
+  final Color? backgroundColor;
+  final Color? textColor;
   final double? width;
   final double height;
   final double borderRadius;
-  final Color? backgroundColor;
-  final Color? textColor;
-  final double? elevation;
-  final EdgeInsetsGeometry? padding;
-  final bool expandWidth;
-  final bool mini;
+  final IconData? icon;
+  final bool loading;
+  final bool outlined;
+  final bool disabled;
+  final EdgeInsets? padding;
+  final double? fontSize;
+  final FontWeight? fontWeight;
+  final ButtonStyle? style;
 
   const CustomButton({
     Key? key,
-    this.text,
-    this.child,
+    required this.text,
     this.onPressed,
-    this.style,
-    this.isLoading = false,
-    this.isOutlined = false,
-    this.isText = false,
-    this.icon,
-    this.width,
-    this.height = 48,
-    this.borderRadius = 12,
     this.backgroundColor,
     this.textColor,
-    this.elevation,
+    this.width,
+    this.height = 48,
+    this.borderRadius = 8,
+    this.icon,
+    this.loading = false,
+    this.outlined = false,
+    this.disabled = false,
     this.padding,
-    this.expandWidth = true,
-    this.mini = false,
-  })  : assert(text != null || child != null, 'Either text or child must be provided'),
-        super(key: key);
+    this.fontSize,
+    this.fontWeight,
+    this.style,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final buttonStyle = style ??
-        _getButtonStyle(
-          context,
-          backgroundColor: backgroundColor,
-          textColor: textColor,
-          elevation: elevation,
-        );
+    final effectiveBackgroundColor =
+        backgroundColor ?? AppTheme.primaryColor;
+    final effectiveTextColor =
+        textColor ?? (outlined ? effectiveBackgroundColor : Colors.white);
 
-    Widget buttonChild = _buildButtonChild(context);
-
-    if (isLoading) {
-      buttonChild = _LoadingChild(
-        child: buttonChild,
-        textColor: textColor ?? _getTextColor(context),
-      );
-    }
-
-    if (icon != null) {
-      buttonChild = _IconChild(
-        icon: icon!,
-        child: buttonChild,
-        mini: mini,
-      );
-    }
-
-    Widget button;
-    if (isOutlined) {
-      button = OutlinedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: buttonStyle,
-        child: buttonChild,
-      );
-    } else if (isText) {
-      button = TextButton(
-        onPressed: isLoading ? null : onPressed,
-        style: buttonStyle,
-        child: buttonChild,
-      );
-    } else {
-      button = ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: buttonStyle,
-        child: buttonChild,
-      );
-    }
-
-    if (!expandWidth) {
-      return button;
-    }
-
-    return SizedBox(
-      width: width ?? (mini ? null : double.infinity),
-      height: height,
-      child: button,
-    );
-  }
-
-  Widget _buildButtonChild(BuildContext context) {
-    if (child != null) return child!;
-
-    return Text(
-      text!,
-      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: textColor ?? _getTextColor(context),
-            fontWeight: FontWeight.w600,
+    Widget buttonChild = Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null && !loading) ...[
+          Icon(icon, color: effectiveTextColor),
+          const SizedBox(width: 8),
+        ],
+        if (loading)
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(effectiveTextColor),
+            ),
+          )
+        else
+          Text(
+            text,
+            style: TextStyle(
+              color: effectiveTextColor,
+              fontSize: fontSize ?? 16,
+              fontWeight: fontWeight ?? FontWeight.w600,
+            ),
           ),
+      ],
+    );
+
+    if (width != null) {
+      buttonChild = SizedBox(width: width, child: buttonChild);
+    }
+
+    final effectiveStyle = style ??
+        (outlined ? _outlinedButtonStyle() : _elevatedButtonStyle());
+
+    if (outlined) {
+      return OutlinedButton(
+        onPressed: (disabled || loading) ? null : onPressed,
+        style: effectiveStyle,
+        child: buttonChild,
+      );
+    }
+
+    return ElevatedButton(
+      onPressed: (disabled || loading) ? null : onPressed,
+      style: effectiveStyle,
+      child: buttonChild,
     );
   }
 
-  ButtonStyle _getButtonStyle(
-    BuildContext context, {
-    Color? backgroundColor,
-    Color? textColor,
-    double? elevation,
-  }) {
-    final theme = Theme.of(context);
-
-    if (isOutlined) {
-      return OutlinedButton.styleFrom(
-        foregroundColor: textColor ?? AppTheme.primaryGreen,
-        side: BorderSide(color: AppTheme.primaryGreen),
-        padding: padding ?? EdgeInsets.symmetric(horizontal: mini ? 12 : 24),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(borderRadius),
-        ),
-      );
-    }
-
-    if (isText) {
-      return TextButton.styleFrom(
-        foregroundColor: textColor ?? AppTheme.primaryGreen,
-        padding: padding ?? EdgeInsets.symmetric(horizontal: mini ? 8 : 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(borderRadius),
-        ),
-      );
-    }
-
+  ButtonStyle _elevatedButtonStyle() {
     return ElevatedButton.styleFrom(
-      backgroundColor: backgroundColor ?? AppTheme.primaryGreen,
+      backgroundColor: backgroundColor ?? AppTheme.primaryColor,
       foregroundColor: textColor ?? Colors.white,
-      elevation: elevation ?? 2,
-      padding: padding ?? EdgeInsets.symmetric(horizontal: mini ? 16 : 24),
+      disabledBackgroundColor:
+          (backgroundColor ?? AppTheme.primaryColor).withOpacity(0.6),
+      padding: padding ??
+          const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      minimumSize: Size(width ?? 0, height),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(borderRadius),
       ),
     );
   }
 
-  Color _getTextColor(BuildContext context) {
-    if (isOutlined || isText) {
-      return AppTheme.primaryGreen;
-    }
-    return Colors.white;
-  }
-}
-
-class _LoadingChild extends StatelessWidget {
-  final Widget child;
-  final Color textColor;
-
-  const _LoadingChild({
-    required this.child,
-    required this.textColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Opacity(
-          opacity: 0,
-          child: child,
-        ),
-        SizedBox(
-          height: 20,
-          width: 20,
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(textColor),
-            strokeWidth: 2,
-          ),
-        ),
-      ],
+  ButtonStyle _outlinedButtonStyle() {
+    final effectiveColor = backgroundColor ?? AppTheme.primaryColor;
+    return OutlinedButton.styleFrom(
+      foregroundColor: effectiveColor,
+      side: BorderSide(color: effectiveColor),
+      padding: padding ??
+          const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      minimumSize: Size(width ?? 0, height),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(borderRadius),
+      ),
     );
   }
 }
 
-class _IconChild extends StatelessWidget {
+class CustomIconButton extends StatelessWidget {
   final IconData icon;
-  final Widget child;
-  final bool mini;
+  final VoidCallback? onPressed;
+  final Color? color;
+  final double size;
+  final bool loading;
+  final bool disabled;
+  final String? tooltip;
+  final EdgeInsets? padding;
 
-  const _IconChild({
+  const CustomIconButton({
+    Key? key,
     required this.icon,
-    required this.child,
-    required this.mini,
-  });
+    this.onPressed,
+    this.color,
+    this.size = 24,
+    this.loading = false,
+    this.disabled = false,
+    this.tooltip,
+    this.padding,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, size: mini ? 18 : 24),
-        SizedBox(width: mini ? 4 : 8),
-        child,
-      ],
+    final effectiveColor = color ?? AppTheme.primaryColor;
+
+    Widget buttonChild = loading
+        ? SizedBox(
+            width: size * 0.8,
+            height: size * 0.8,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(effectiveColor),
+            ),
+          )
+        : Icon(
+            icon,
+            color: effectiveColor,
+            size: size,
+          );
+
+    if (tooltip != null) {
+      buttonChild = Tooltip(
+        message: tooltip!,
+        child: buttonChild,
+      );
+    }
+
+    return IconButton(
+      onPressed: (disabled || loading) ? null : onPressed,
+      padding: padding ?? const EdgeInsets.all(8),
+      constraints: const BoxConstraints(),
+      splashRadius: size * 0.8,
+      icon: buttonChild,
     );
   }
-}
-
-// Specialized button variants
-class PrimaryButton extends CustomButton {
-  PrimaryButton({
-    Key? key,
-    required String text,
-    required VoidCallback? onPressed,
-    bool isLoading = false,
-    IconData? icon,
-    bool expandWidth = true,
-  }) : super(
-          key: key,
-          text: text,
-          onPressed: onPressed,
-          isLoading: isLoading,
-          icon: icon,
-          expandWidth: expandWidth,
-        );
-}
-
-class SecondaryButton extends CustomButton {
-  SecondaryButton({
-    Key? key,
-    required String text,
-    required VoidCallback? onPressed,
-    bool isLoading = false,
-    IconData? icon,
-    bool expandWidth = true,
-  }) : super(
-          key: key,
-          text: text,
-          onPressed: onPressed,
-          isLoading: isLoading,
-          icon: icon,
-          isOutlined: true,
-          expandWidth: expandWidth,
-        );
-}
-
-class TextActionButton extends CustomButton {
-  TextActionButton({
-    Key? key,
-    required String text,
-    required VoidCallback? onPressed,
-    bool isLoading = false,
-    IconData? icon,
-  }) : super(
-          key: key,
-          text: text,
-          onPressed: onPressed,
-          isLoading: isLoading,
-          icon: icon,
-          isText: true,
-          expandWidth: false,
-          mini: true,
-        );
 }

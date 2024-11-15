@@ -1,6 +1,5 @@
-// lib/models/pet_profile.dart
-
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PetProfile {
   final String id;
@@ -11,52 +10,30 @@ class PetProfile {
   final String gender;
   final double weight;
   final String color;
-  final String microchipNumber;
-  final String photoUrl;
+  final String? microchipNumber;
+  final String? registrationNumber;
+  final String? profileImageUrl;
+  final Map<String, dynamic> medicalInfo;
   final List<String> allergies;
-  final List<String> medicalConditions;
   final List<String> medications;
-  final Map<String, String> dietaryRestrictions;
-  final String veterinarianInfo;
-  final String emergencyContact;
-  final String insuranceInfo;
-  final List<String> vaccinations;
-  final String notes;
-  // New premium features
-  final String ownerId;
-  final List<String> caregivers;
-  final Map<String, dynamic> vetDetails;
-  final Map<String, dynamic> insuranceDetails;
-  final Map<String, dynamic> medicalHistory;
-  final Map<String, dynamic> behavioralHistory;
-  final Map<String, dynamic> nutritionPlan;
-  final Map<String, dynamic> exerciseRoutine;
-  final Map<String, dynamic> groomingNeeds;
-  final List<String> medications_detailed;
-  final Map<String, dynamic> vaccineSchedule;
-  final Map<String, dynamic> preventativeCare;
-  final List<String> chronicConditions;
-  final Map<String, dynamic> vitals;
-  final Map<String, dynamic> growthHistory;
-  final List<String> allergies_detailed;
-  final Map<String, dynamic> dietaryPreferences;
-  final List<String> temperament;
-  final Map<String, dynamic> training;
-  final Map<String, dynamic> socialBehavior;
-  final List<String> photos;
-  final Map<String, dynamic> documents;
-  final Map<String, dynamic> appointments;
-  final Map<String, dynamic> reminders;
-  final String bloodType;
-  final Map<String, dynamic> reproductiveStatus;
-  final Map<String, dynamic> identificationMarks;
-  final Map<String, dynamic> licenses;
-  final Map<String, dynamic> awards;
-  final Map<String, dynamic> travelHistory;
-  final Map<String, dynamic> environmentalFactors;
-  final bool isDeceased;
-  final DateTime? deceasedDate;
-  final String? causeOfDeath;
+  final Map<String, bool> vaccinations;
+  // Enhanced fields
+  final String? createdBy;
+  final DateTime createdAt;
+  final bool isPremium;
+  final Map<String, dynamic>? metadata;
+  final Map<String, dynamic>? dietaryNeeds;
+  final Map<String, dynamic>? behavioralTraits;
+  final Map<String, dynamic>? exerciseNeeds;
+  final List<String>? specialNeeds;
+  final Map<String, dynamic>? grooming;
+  final Map<String, dynamic>? socialBehavior;
+  final Map<String, dynamic>? trainingProgress;
+  final List<String>? preferredActivities;
+  final Map<String, dynamic>? schedule;
+  final bool isActive;
+  final String? insuranceInfo;
+  final Map<String, dynamic>? emergencyContacts;
 
   PetProfile({
     required this.id,
@@ -67,60 +44,112 @@ class PetProfile {
     required this.gender,
     required this.weight,
     required this.color,
-    this.microchipNumber = '',
-    this.photoUrl = '',
+    this.microchipNumber,
+    this.registrationNumber,
+    this.profileImageUrl,
+    this.medicalInfo = const {},
     this.allergies = const [],
-    this.medicalConditions = const [],
     this.medications = const [],
-    this.dietaryRestrictions = const {},
-    required this.veterinarianInfo,
-    required this.emergencyContact,
-    this.insuranceInfo = '',
-    this.vaccinations = const [],
-    this.notes = '',
-    // New premium features
-    required this.ownerId,
-    this.caregivers = const [],
-    this.vetDetails = const {},
-    this.insuranceDetails = const {},
-    this.medicalHistory = const {},
-    this.behavioralHistory = const {},
-    this.nutritionPlan = const {},
-    this.exerciseRoutine = const {},
-    this.groomingNeeds = const {},
-    this.medications_detailed = const [],
-    this.vaccineSchedule = const {},
-    this.preventativeCare = const {},
-    this.chronicConditions = const [],
-    this.vitals = const {},
-    this.growthHistory = const {},
-    this.allergies_detailed = const [],
-    this.dietaryPreferences = const {},
-    this.temperament = const [],
-    this.training = const {},
-    this.socialBehavior = const {},
-    this.photos = const [],
-    this.documents = const {},
-    this.appointments = const {},
-    this.reminders = const {},
-    this.bloodType = '',
-    this.reproductiveStatus = const {},
-    this.identificationMarks = const {},
-    this.licenses = const {},
-    this.awards = const {},
-    this.travelHistory = const {},
-    this.environmentalFactors = const {},
-    this.isDeceased = false,
-    this.deceasedDate,
-    this.causeOfDeath,
-  });
+    this.vaccinations = const {},
+    this.createdBy,
+    DateTime? createdAt,
+    this.isPremium = false,
+    this.metadata,
+    this.dietaryNeeds,
+    this.behavioralTraits,
+    this.exerciseNeeds,
+    this.specialNeeds,
+    this.grooming,
+    this.socialBehavior,
+    this.trainingProgress,
+    this.preferredActivities,
+    this.schedule,
+    this.isActive = true,
+    this.insuranceInfo,
+    this.emergencyContacts,
+  }) : this.createdAt = createdAt ?? DateTime.now();
 
-  int get age {
-    if (isDeceased && deceasedDate != null) {
-      return deceasedDate!.year - dateOfBirth.year;
-    }
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'species': species,
+      'breed': breed,
+      'dateOfBirth': dateOfBirth.toIso8601String(),
+      'gender': gender,
+      'weight': weight,
+      'color': color,
+      'microchipNumber': microchipNumber,
+      'registrationNumber': registrationNumber,
+      'profileImageUrl': profileImageUrl,
+      'medicalInfo': medicalInfo,
+      'allergies': allergies,
+      'medications': medications,
+      'vaccinations': vaccinations,
+      'createdBy': createdBy,
+      'createdAt': createdAt.toIso8601String(),
+      'isPremium': isPremium,
+      'metadata': metadata,
+      'dietaryNeeds': dietaryNeeds,
+      'behavioralTraits': behavioralTraits,
+      'exerciseNeeds': exerciseNeeds,
+      'specialNeeds': specialNeeds,
+      'grooming': grooming,
+      'socialBehavior': socialBehavior,
+      'trainingProgress': trainingProgress,
+      'preferredActivities': preferredActivities,
+      'schedule': schedule,
+      'isActive': isActive,
+      'insuranceInfo': insuranceInfo,
+      'emergencyContacts': emergencyContacts,
+    };
+  }
+
+  factory PetProfile.fromJson(Map<String, dynamic> json) {
+    return PetProfile(
+      id: json['id'],
+      name: json['name'],
+      species: json['species'],
+      breed: json['breed'],
+      dateOfBirth: DateTime.parse(json['dateOfBirth']),
+      gender: json['gender'],
+      weight: json['weight'].toDouble(),
+      color: json['color'],
+      microchipNumber: json['microchipNumber'],
+      registrationNumber: json['registrationNumber'],
+      profileImageUrl: json['profileImageUrl'],
+      medicalInfo: Map<String, dynamic>.from(json['medicalInfo'] ?? {}),
+      allergies: List<String>.from(json['allergies'] ?? []),
+      medications: List<String>.from(json['medications'] ?? []),
+      vaccinations: Map<String, bool>.from(json['vaccinations'] ?? {}),
+      createdBy: json['createdBy'],
+      createdAt: json['createdAt'] != null 
+          ? DateTime.parse(json['createdAt'])
+          : null,
+      isPremium: json['isPremium'] ?? false,
+      metadata: json['metadata'],
+      dietaryNeeds: json['dietaryNeeds'],
+      behavioralTraits: json['behavioralTraits'],
+      exerciseNeeds: json['exerciseNeeds'],
+      specialNeeds: json['specialNeeds'] != null 
+          ? List<String>.from(json['specialNeeds'])
+          : null,
+      grooming: json['grooming'],
+      socialBehavior: json['socialBehavior'],
+      trainingProgress: json['trainingProgress'],
+      preferredActivities: json['preferredActivities'] != null 
+          ? List<String>.from(json['preferredActivities'])
+          : null,
+      schedule: json['schedule'],
+      isActive: json['isActive'] ?? true,
+      insuranceInfo: json['insuranceInfo'],
+      emergencyContacts: json['emergencyContacts'],
+    );
+  }
+
+  int getAge() {
     final now = DateTime.now();
-    int age = now.year - dateOfBirth.year;
+    var age = now.year - dateOfBirth.year;
     if (now.month < dateOfBirth.month || 
         (now.month == dateOfBirth.month && now.day < dateOfBirth.day)) {
       age--;
@@ -128,137 +157,89 @@ class PetProfile {
     return age;
   }
 
-  Map<String, dynamic> toJson() {
+  String getAgeDisplay() {
+    final age = getAge();
+    if (age == 0) {
+      final months = DateTime.now().difference(dateOfBirth).inDays ~/ 30;
+      return '$months months';
+    }
+    return '$age years';
+  }
+
+  bool hasAllergy(String allergy) => 
+      allergies.contains(allergy.toLowerCase());
+
+  bool hasMedication(String medication) => 
+      medications.contains(medication);
+
+  bool hasVaccination(String vaccination) => 
+      vaccinations[vaccination] ?? false;
+
+  bool hasSpecialNeed(String need) => 
+      specialNeeds?.contains(need) ?? false;
+
+  bool canEdit(String userId) => createdBy == userId || !isPremium;
+
+  Map<String, dynamic> getDietarySummary() {
+    if (dietaryNeeds == null) return {};
+    
     return {
-      // Existing fields...
-      'ownerId': ownerId,
-      'caregivers': caregivers,
-      'vetDetails': vetDetails,
-      'insuranceDetails': insuranceDetails,
-      'medicalHistory': medicalHistory,
-      'behavioralHistory': behavioralHistory,
-      'nutritionPlan': nutritionPlan,
-      'exerciseRoutine': exerciseRoutine,
-      'groomingNeeds': groomingNeeds,
-      'medications_detailed': medications_detailed,
-      'vaccineSchedule': vaccineSchedule,
-      'preventativeCare': preventativeCare,
-      'chronicConditions': chronicConditions,
-      'vitals': vitals,
-      'growthHistory': growthHistory,
-      'allergies_detailed': allergies_detailed,
-      'dietaryPreferences': dietaryPreferences,
-      'temperament': temperament,
-      'training': training,
-      'socialBehavior': socialBehavior,
-      'photos': photos,
-      'documents': documents,
-      'appointments': appointments,
-      'reminders': reminders,
-      'bloodType': bloodType,
-      'reproductiveStatus': reproductiveStatus,
-      'identificationMarks': identificationMarks,
-      'licenses': licenses,
-      'awards': awards,
-      'travelHistory': travelHistory,
-      'environmentalFactors': environmentalFactors,
-      'isDeceased': isDeceased,
-      'deceasedDate': deceasedDate?.toIso8601String(),
-      'causeOfDeath': causeOfDeath,
+      'restrictions': dietaryNeeds!['restrictions'] ?? [],
+      'preferences': dietaryNeeds!['preferences'] ?? [],
+      'schedule': dietaryNeeds!['schedule'],
+      'portions': dietaryNeeds!['portions'],
     };
   }
 
-  factory PetProfile.fromJson(Map<String, dynamic> json) {
-    return PetProfile(
-      // Existing fields...
-      ownerId: json['ownerId'],
-      caregivers: List<String>.from(json['caregivers'] ?? []),
-      vetDetails: Map<String, dynamic>.from(json['vetDetails'] ?? {}),
-      insuranceDetails: Map<String, dynamic>.from(json['insuranceDetails'] ?? {}),
-      medicalHistory: Map<String, dynamic>.from(json['medicalHistory'] ?? {}),
-      behavioralHistory: Map<String, dynamic>.from(json['behavioralHistory'] ?? {}),
-      nutritionPlan: Map<String, dynamic>.from(json['nutritionPlan'] ?? {}),
-      exerciseRoutine: Map<String, dynamic>.from(json['exerciseRoutine'] ?? {}),
-      groomingNeeds: Map<String, dynamic>.from(json['groomingNeeds'] ?? {}),
-      medications_detailed: List<String>.from(json['medications_detailed'] ?? []),
-      vaccineSchedule: Map<String, dynamic>.from(json['vaccineSchedule'] ?? {}),
-      preventativeCare: Map<String, dynamic>.from(json['preventativeCare'] ?? {}),
-      chronicConditions: List<String>.from(json['chronicConditions'] ?? []),
-      vitals: Map<String, dynamic>.from(json['vitals'] ?? {}),
-      growthHistory: Map<String, dynamic>.from(json['growthHistory'] ?? {}),
-      allergies_detailed: List<String>.from(json['allergies_detailed'] ?? []),
-      dietaryPreferences: Map<String, dynamic>.from(json['dietaryPreferences'] ?? {}),
-      temperament: List<String>.from(json['temperament'] ?? []),
-      training: Map<String, dynamic>.from(json['training'] ?? {}),
-      socialBehavior: Map<String, dynamic>.from(json['socialBehavior'] ?? {}),
-      photos: List<String>.from(json['photos'] ?? []),
-      documents: Map<String, dynamic>.from(json['documents'] ?? {}),
-      appointments: Map<String, dynamic>.from(json['appointments'] ?? {}),
-      reminders: Map<String, dynamic>.from(json['reminders'] ?? {}),
-      bloodType: json['bloodType'] ?? '',
-      reproductiveStatus: Map<String, dynamic>.from(json['reproductiveStatus'] ?? {}),
-      identificationMarks: Map<String, dynamic>.from(json['identificationMarks'] ?? {}),
-      licenses: Map<String, dynamic>.from(json['licenses'] ?? {}),
-      awards: Map<String, dynamic>.from(json['awards'] ?? {}),
-      travelHistory: Map<String, dynamic>.from(json['travelHistory'] ?? {}),
-      environmentalFactors: Map<String, dynamic>.from(json['environmentalFactors'] ?? {}),
-      isDeceased: json['isDeceased'] ?? false,
-      deceasedDate: json['deceasedDate'] != null 
-          ? DateTime.parse(json['deceasedDate']) 
-          : null,
-      causeOfDeath: json['causeOfDeath'],
-    );
+  Map<String, dynamic> getExerciseSummary() {
+    if (exerciseNeeds == null) return {};
+    
+    return {
+      'recommendedDaily': exerciseNeeds!['recommendedDaily'],
+      'intensity': exerciseNeeds!['intensity'],
+      'restrictions': exerciseNeeds!['restrictions'] ?? [],
+      'preferredActivities': preferredActivities ?? [],
+    };
   }
 
-  // Helper methods
-  bool needsVaccination() {
-    return vaccineSchedule.entries.any((vaccine) {
-      final dueDate = DateTime.parse(vaccine.value['dueDate']);
-      return DateTime.now().isAfter(dueDate);
-    });
+  Map<String, dynamic> getGroomingNeeds() {
+    if (grooming == null) return {};
+    
+    return {
+      'frequency': grooming!['frequency'],
+      'specialInstructions': grooming!['specialInstructions'] ?? [],
+      'lastGroomed': grooming!['lastGroomed'],
+      'nextAppointment': grooming!['nextAppointment'],
+    };
   }
 
-  List<String> getUpcomingAppointments() {
-    final upcoming = <String>[];
-    appointments.forEach((key, value) {
-      final appointmentDate = DateTime.parse(value['date']);
-      if (DateTime.now().isBefore(appointmentDate)) {
-        upcoming.add(key);
-      }
-    });
-    return upcoming;
+  List<Map<String, String>> getEmergencyContactsList() {
+    if (emergencyContacts == null) return [];
+    
+    return emergencyContacts!.entries.map((entry) {
+      final contact = entry.value as Map<String, dynamic>;
+      return {
+        'name': entry.key,
+        'phone': contact['phone'] ?? '',
+        'relationship': contact['relationship'] ?? '',
+        'priority': contact['priority']?.toString() ?? '1',
+      };
+    }).toList()
+      ..sort((a, b) => int.parse(a['priority']!).compareTo(int.parse(b['priority']!)));
   }
 
-  bool hasActiveMedicalConditions() {
-    return chronicConditions.isNotEmpty;
-  }
-
-  Map<String, dynamic> getGrowthTrend() {
-    return growthHistory;
-  }
-
-  bool needsGrooming() {
-    if (groomingNeeds.isEmpty) return false;
-    final lastGrooming = DateTime.parse(groomingNeeds['lastGrooming']);
-    final frequency = groomingNeeds['frequency'] ?? 30; // days
-    return DateTime.now().difference(lastGrooming).inDays >= frequency;
-  }
-
-  List<String> getActiveCaretakers() {
-    return caregivers.where((caregiver) => 
-        caregiver != ownerId).toList();
-  }
-
-  bool hasSpecialNeeds() {
-    return chronicConditions.isNotEmpty || 
-           allergies_detailed.isNotEmpty || 
-           dietaryRestrictions.isNotEmpty;
-  }
-
-  bool isInsuranceValid() {
-    if (insuranceDetails.isEmpty) return false;
-    final expiryDate = DateTime.parse(insuranceDetails['expiryDate']);
-    return DateTime.now().isBefore(expiryDate);
+  bool requiresAttention() {
+    final now = DateTime.now();
+    final vaccinesDue = vaccinations.entries
+        .where((entry) => entry.value == false)
+        .isNotEmpty;
+    
+    final medicalCheckNeeded = medicalInfo['lastCheckup'] != null &&
+        DateTime.parse(medicalInfo['lastCheckup']).isBefore(
+          now.subtract(const Duration(days: 365))
+        );
+    
+    return vaccinesDue || medicalCheckNeeded;
   }
 }
 
@@ -268,20 +249,12 @@ enum PetGender {
   unknown
 }
 
-enum PetStatus {
-  active,
-  deceased,
-  rehomed,
-  lost
-}
-
-enum TemperamentType {
-  friendly,
-  shy,
-  aggressive,
-  playful,
-  calm,
-  anxious,
-  protective,
-  independent
+extension PetGenderExtension on PetGender {
+  String get displayName {
+    switch (this) {
+      case PetGender.male: return 'Male';
+      case PetGender.female: return 'Female';
+      case PetGender.unknown: return 'Unknown';
+    }
+  }
 }

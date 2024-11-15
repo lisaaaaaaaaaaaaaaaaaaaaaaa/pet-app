@@ -1,258 +1,275 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import '../models/appointment.dart';
 import '../theme/app_theme.dart';
+import '../utils/date_formatter.dart';
 import 'common/custom_card.dart';
 
 class AppointmentCard extends StatelessWidget {
-  final String appointmentId;
-  final String petName;
-  final String? petImageUrl;
-  final String veterinarianName;
-  final DateTime appointmentDate;
-  final String appointmentType;
-  final String status;
+  final Appointment appointment;
   final VoidCallback? onTap;
-  final VoidCallback? onCancel;
-  final VoidCallback? onReschedule;
-  final bool isUpcoming;
-  final String? notes;
-  final bool isLoading;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final bool showActions;
+  final bool isExpanded;
 
   const AppointmentCard({
     Key? key,
-    required this.appointmentId,
-    required this.petName,
-    this.petImageUrl,
-    required this.veterinarianName,
-    required this.appointmentDate,
-    required this.appointmentType,
-    required this.status,
+    required this.appointment,
     this.onTap,
-    this.onCancel,
-    this.onReschedule,
-    this.isUpcoming = true,
-    this.notes,
-    this.isLoading = false,
+    this.onEdit,
+    this.onDelete,
+    this.showActions = true,
+    this.isExpanded = false,
   }) : super(key: key);
-
-  Color _getStatusColor() {
-    switch (status.toLowerCase()) {
-      case 'confirmed':
-        return AppTheme.success;
-      case 'pending':
-        return AppTheme.warning;
-      case 'cancelled':
-        return AppTheme.error;
-      case 'completed':
-        return AppTheme.primaryGreen;
-      default:
-        return AppTheme.neutralGrey;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final formattedDate = DateFormat('MMM dd, yyyy').format(appointmentDate);
-    final formattedTime = DateFormat('hh:mm a').format(appointmentDate);
-    final statusColor = _getStatusColor();
-
     return CustomCard(
-      onTap: isLoading ? null : onTap,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (petImageUrl != null)
-                Container(
-                  width: 60,
-                  height: 60,
-                  margin: const EdgeInsets.only(right: 12),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    image: DecorationImage(
-                      image: NetworkImage(petImageUrl!),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  width: 60,
-                  height: 60,
-                  margin: const EdgeInsets.only(right: 12),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppTheme.lightBlue.withOpacity(0.3),
-                  ),
-                  child: const Icon(
-                    Icons.pets,
-                    color: AppTheme.primaryGreen,
-                    size: 30,
-                  ),
-                ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      petName,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.primaryGreen,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'with Dr. $veterinarianName',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.secondaryGreen,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  status,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: statusColor,
-                        fontWeight: FontWeight.w600,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _buildStatusIndicator(),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        appointment.title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimaryColor,
+                        ),
                       ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.calendar_today,
-                          size: 16,
-                          color: AppTheme.neutralGrey,
+                      const SizedBox(height: 4),
+                      Text(
+                        appointment.doctorName,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppTheme.textSecondaryColor,
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          formattedDate,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.access_time,
-                          size: 16,
-                          color: AppTheme.neutralGrey,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          formattedTime,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.medical_services,
-                          size: 16,
-                          color: AppTheme.neutralGrey,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          appointmentType,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                    if (notes != null) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.note,
-                            size: 16,
-                            color: AppTheme.neutralGrey,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              notes!,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppTheme.neutralGrey,
-                                  ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
                       ),
                     ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (isUpcoming && status.toLowerCase() != 'cancelled') ...[
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (onReschedule != null)
-                  TextButton.icon(
-                    onPressed: isLoading ? null : onReschedule,
-                    icon: const Icon(Icons.calendar_today),
-                    label: const Text('Reschedule'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppTheme.primaryGreen,
-                    ),
                   ),
-                if (onCancel != null) ...[
-                  const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: isLoading ? null : onCancel,
-                    icon: const Icon(Icons.cancel),
-                    label: const Text('Cancel'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppTheme.error,
-                    ),
+                ),
+                if (showActions) ...[
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: onEdit,
+                    color: AppTheme.primaryColor,
+                    iconSize: 20,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: onDelete,
+                    color: AppTheme.errorColor,
+                    iconSize: 20,
                   ),
                 ],
               ],
             ),
+            const SizedBox(height: 16),
+            _buildAppointmentInfo(),
+            if (isExpanded && appointment.notes != null) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 16),
+              _buildNotes(),
+            ],
+            if (isExpanded && appointment.attachments?.isNotEmpty == true) ...[
+              const SizedBox(height: 16),
+              _buildAttachments(),
+            ],
           ],
-          if (isLoading)
-            const Padding(
-              padding: EdgeInsets.only(top: 16),
-              child: Center(
-                child: CircularProgressIndicator(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusIndicator() {
+    Color color;
+    IconData icon;
+
+    switch (appointment.status) {
+      case AppointmentStatus.scheduled:
+        color = Colors.blue;
+        icon = Icons.calendar_today;
+        break;
+      case AppointmentStatus.confirmed:
+        color = Colors.green;
+        icon = Icons.check_circle;
+        break;
+      case AppointmentStatus.completed:
+        color = AppTheme.primaryColor;
+        icon = Icons.task_alt;
+        break;
+      case AppointmentStatus.cancelled:
+        color = AppTheme.errorColor;
+        icon = Icons.cancel;
+        break;
+      case AppointmentStatus.rescheduled:
+        color = Colors.orange;
+        icon = Icons.update;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        icon,
+        color: color,
+        size: 24,
+      ),
+    );
+  }
+
+  Widget _buildAppointmentInfo() {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildInfoItem(
+            Icons.access_time,
+            DateFormatter.formatTime(appointment.dateTime),
+            'Time',
+          ),
+        ),
+        Expanded(
+          child: _buildInfoItem(
+            Icons.calendar_today,
+            DateFormatter.formatDate(appointment.dateTime),
+            'Date',
+          ),
+        ),
+        if (appointment.duration != null)
+          Expanded(
+            child: _buildInfoItem(
+              Icons.timer_outlined,
+              '${appointment.duration} min',
+              'Duration',
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildInfoItem(IconData icon, String value, String label) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: AppTheme.textSecondaryColor,
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.textPrimaryColor,
               ),
             ),
-        ],
-      ),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondaryColor,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotes() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Notes',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          appointment.notes!,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textSecondaryColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAttachments() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Attachments',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: appointment.attachments!.map((attachment) {
+            return Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.grey.withOpacity(0.2),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.attach_file,
+                    size: 16,
+                    color: AppTheme.textSecondaryColor,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    attachment,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

@@ -1,283 +1,259 @@
 import 'package:flutter/material.dart';
+import '../models/symptom_record.dart';
 import '../theme/app_theme.dart';
+import '../utils/date_formatter.dart';
 import 'common/custom_card.dart';
 
 class SymptomTrackerCard extends StatelessWidget {
-  final String petName;
-  final List<SymptomRecord> symptoms;
-  final DateTime? lastUpdated;
-  final VoidCallback? onAddSymptom;
-  final Function(SymptomRecord)? onSymptomTap;
-  final bool isLoading;
-  final List<String>? activeTreatments;
-  final String? veterinaryNotes;
+  final SymptomRecord record;
+  final VoidCallback? onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final bool showActions;
+  final bool isExpanded;
+  final EdgeInsets padding;
 
   const SymptomTrackerCard({
     Key? key,
-    required this.petName,
-    required this.symptoms,
-    this.lastUpdated,
-    this.onAddSymptom,
-    this.onSymptomTap,
-    this.isLoading = false,
-    this.activeTreatments,
-    this.veterinaryNotes,
+    required this.record,
+    this.onTap,
+    this.onEdit,
+    this.onDelete,
+    this.showActions = true,
+    this.isExpanded = false,
+    this.padding = const EdgeInsets.all(16),
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return CustomCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Symptom Tracker',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: AppTheme.primaryGreen,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    petName,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.secondaryGreen,
-                        ),
-                  ),
-                ],
-              ),
-              if (onAddSymptom != null)
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  color: AppTheme.primaryGreen,
-                  onPressed: isLoading ? null : onAddSymptom,
-                ),
-            ],
-          ),
-          if (lastUpdated != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Last updated: ${_formatDate(lastUpdated!)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.neutralGrey,
-                  ),
-            ),
-          ],
-          if (isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else ...[
-            if (symptoms.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(
-                  child: Text(
-                    'No symptoms recorded',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.neutralGrey,
-                        ),
-                  ),
-                ),
-              )
-            else ...[
+      onTap: onTap,
+      child: Padding(
+        padding: padding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(),
+            if (isExpanded) ...[
               const SizedBox(height: 16),
-              _buildSymptomsList(context),
-            ],
-            if (activeTreatments != null && activeTreatments!.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildTreatmentsList(context),
-            ],
-            if (veterinaryNotes != null) ...[
-              const SizedBox(height: 16),
-              _buildVeterinaryNotes(context),
+              _buildSymptomsList(),
+              if (record.notes != null && record.notes!.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _buildNotes(),
+              ],
             ],
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildSymptomsList(BuildContext context) {
-    final activeSymptoms = symptoms.where((s) => s.isActive).toList();
-    final resolvedSymptoms = symptoms.where((s) => !s.isActive).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildHeader() {
+    return Row(
       children: [
-        if (activeSymptoms.isNotEmpty) ...[
-          Text(
-            'Active Symptoms',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppTheme.secondaryGreen,
-                  fontWeight: FontWeight.w600,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                DateFormatter.formatDateTime(record.timestamp),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimaryColor,
                 ),
-          ),
-          const SizedBox(height: 8),
-          ...activeSymptoms.map((symptom) => _buildSymptomItem(context, symptom)),
-        ],
-        if (resolvedSymptoms.isNotEmpty) ...[
-          if (activeSymptoms.isNotEmpty) const SizedBox(height: 16),
-          Text(
-            'Resolved Symptoms',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppTheme.secondaryGreen,
-                  fontWeight: FontWeight.w600,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${record.symptoms.length} symptom${record.symptoms.length != 1 ? 's' : ''}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppTheme.textSecondaryColor,
                 ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          ...resolvedSymptoms.map((symptom) => _buildSymptomItem(context, symptom)),
+        ),
+        _buildSeverityIndicator(),
+        if (showActions) ...[
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: onEdit,
+            color: AppTheme.primaryColor,
+            iconSize: 20,
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: onDelete,
+            color: AppTheme.errorColor,
+            iconSize: 20,
+          ),
         ],
       ],
     );
   }
 
-  Widget _buildSymptomItem(BuildContext context, SymptomRecord symptom) {
-    return InkWell(
-      onTap: onSymptomTap != null ? () => onSymptomTap!(symptom) : null,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: (symptom.isActive ? AppTheme.warning : AppTheme.success)
-                    .withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                symptom.icon ?? (symptom.isActive ? Icons.warning : Icons.check_circle),
-                color: symptom.isActive ? AppTheme.warning : AppTheme.success,
-                size: 20,
-              ),
+  Widget _buildSeverityIndicator() {
+    final averageSeverity = record.symptoms.isEmpty
+        ? 0.0
+        : record.symptoms.map((s) => s.severity ?? 0.0).reduce((a, b) => a + b) /
+            record.symptoms.length;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 6,
+      ),
+      decoration: BoxDecoration(
+        color: _getSeverityColor(averageSeverity).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _getSeverityIcon(averageSeverity),
+            size: 16,
+            color: _getSeverityColor(averageSeverity),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            averageSeverity.toStringAsFixed(1),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: _getSeverityColor(averageSeverity),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    symptom.name,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  if (symptom.notes != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      symptom.notes!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.neutralGrey,
-                          ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Text(
-              _formatDate(symptom.dateRecorded),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.neutralGrey,
-                  ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildTreatmentsList(BuildContext context) {
+  Widget _buildSymptomsList() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Active Treatments',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: AppTheme.secondaryGreen,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
+        const Divider(),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: activeTreatments!.map((treatment) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryGreen.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                treatment,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.primaryGreen,
-                    ),
-              ),
-            );
+          children: record.symptoms.map((symptom) {
+            return _buildSymptomChip(symptom);
           }).toList(),
         ),
       ],
     );
   }
 
-  Widget _buildVeterinaryNotes(BuildContext context) {
+  Widget _buildSymptomChip(Symptom symptom) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.lightBlue.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 6,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppTheme.primaryColor.withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Veterinary Notes',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppTheme.secondaryGreen,
-                  fontWeight: FontWeight.w600,
+            symptom.name,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppTheme.textPrimaryColor,
+            ),
+          ),
+          if (symptom.severity != null) ...[
+            const SizedBox(width: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: 2,
+              ),
+              decoration: BoxDecoration(
+                color: _getSeverityColor(symptom.severity!),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                symptom.severity!.toStringAsFixed(0),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
                 ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            veterinaryNotes!,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+              ),
+            ),
+          ],
+          if (symptom.duration != null) ...[
+            const SizedBox(width: 4),
+            Text(
+              _formatDuration(symptom.duration!),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondaryColor,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
+  Widget _buildNotes() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(),
+        const SizedBox(height: 8),
+        const Text(
+          'Notes',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          record.notes!,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textSecondaryColor,
+          ),
+        ),
+      ],
+    );
   }
-}
 
-class SymptomRecord {
-  final String name;
-  final DateTime dateRecorded;
-  final bool isActive;
-  final String? notes;
-  final IconData? icon;
-  final String? severity;
-  final List<String>? relatedSymptoms;
+  Color _getSeverityColor(double severity) {
+    if (severity <= 3) return Colors.green;
+    if (severity <= 6) return Colors.orange;
+    return Colors.red;
+  }
 
-  const SymptomRecord({
-    required this.name,
-    required this.dateRecorded,
-    this.isActive = true,
-    this.notes,
-    this.icon,
-    this.severity,
-    this.relatedSymptoms,
-  });
+  IconData _getSeverityIcon(double severity) {
+    if (severity <= 3) return Icons.sentiment_satisfied;
+    if (severity <= 6) return Icons.sentiment_neutral;
+    return Icons.sentiment_dissatisfied;
+  }
+
+  String _formatDuration(Duration duration) {
+    if (duration.inDays >= 7) {
+      return '${(duration.inDays / 7).floor()}w';
+    }
+    if (duration.inDays > 0) {
+      return '${duration.inDays}d';
+    }
+    if (duration.inHours > 0) {
+      return '${duration.inHours}h';
+    }
+    return '${duration.inMinutes}m';
+  }
 }

@@ -1,121 +1,227 @@
 import 'package:flutter/material.dart';
+import '../models/pet.dart';
 import '../theme/app_theme.dart';
+import 'common/custom_card.dart';
 
 class PetCard extends StatelessWidget {
-  final String name;
-  final String? imageUrl;
-  final bool isAddCard;
-  final VoidCallback onTap;
+  final Pet pet;
+  final VoidCallback? onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final bool showActions;
+  final bool isExpanded;
+  final double? width;
+  final double? height;
+  final BorderRadius? borderRadius;
+  final EdgeInsets padding;
 
   const PetCard({
     Key? key,
-    required this.name,
-    this.imageUrl,
-    this.isAddCard = false,
-    required this.onTap,
+    required this.pet,
+    this.onTap,
+    this.onEdit,
+    this.onDelete,
+    this.showActions = true,
+    this.isExpanded = false,
+    this.width,
+    this.height,
+    this.borderRadius,
+    this.padding = const EdgeInsets.all(16),
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return CustomCard(
       onTap: onTap,
-      child: Container(
-        width: 140,
-        margin: const EdgeInsets.only(right: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
+      width: width,
+      height: height,
+      borderRadius: borderRadius,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(),
+          if (isExpanded) ...[
+            const SizedBox(height: 16),
+            _buildDetails(),
           ],
-        ),
-        child: isAddCard
-            ? Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryGreen.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.add,
-                      size: 32,
-                      color: AppTheme.primaryGreen,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Add Pet',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: AppTheme.primaryGreen,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ],
-              )
-            : Column(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(16),
-                        ),
-                        image: imageUrl != null
-                            ? DecorationImage(
-                                image: NetworkImage(imageUrl!),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
-                      ),
-                      child: imageUrl == null
-                          ? Center(
-                              child: Icon(
-                                Icons.pets,
-                                size: 40,
-                                color: AppTheme.primaryGreen,
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            name,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'View Details',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppTheme.primaryGreen,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+        ],
       ),
     );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: padding,
+      child: Row(
+        children: [
+          _buildPetImage(),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  pet.name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimaryColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${pet.breed} • ${pet.age} years',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textSecondaryColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                _buildStatusChip(),
+              ],
+            ),
+          ),
+          if (showActions)
+            _buildActions(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPetImage() {
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        image: DecorationImage(
+          image: NetworkImage(pet.imageUrl),
+          fit: BoxFit.cover,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: _getStatusColor().withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        pet.status,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: _getStatusColor(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActions() {
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.edit_outlined),
+          onPressed: onEdit,
+          color: AppTheme.primaryColor,
+          iconSize: 20,
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete_outline),
+          onPressed: onDelete,
+          color: AppTheme.errorColor,
+          iconSize: 20,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetails() {
+    return Padding(
+      padding: padding.copyWith(top: 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(),
+          const SizedBox(height: 16),
+          _buildDetailRow('Species', pet.species),
+          _buildDetailRow('Gender', pet.gender),
+          _buildDetailRow('Weight', '${pet.weight} kg'),
+          if (pet.microchipId != null)
+            _buildDetailRow('Microchip ID', pet.microchipId!),
+          if (pet.notes?.isNotEmpty == true) ...[
+            const SizedBox(height: 16),
+            const Text(
+              'Notes',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimaryColor,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              pet.notes!,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppTheme.textSecondaryColor,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppTheme.textSecondaryColor,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.textPrimaryColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getStatusColor() {
+    switch (pet.status.toLowerCase()) {
+      case 'active':
+        return Colors.green;
+      case 'inactive':
+        return Colors.grey;
+      case 'pending':
+        return Colors.orange;
+      default:
+        return AppTheme.primaryColor;
+    }
   }
 }

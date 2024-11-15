@@ -1,365 +1,250 @@
 import 'package:flutter/material.dart';
+import '../models/pet.dart';
 import '../theme/app_theme.dart';
 import 'common/custom_card.dart';
 
 class PetProfileCard extends StatelessWidget {
-  final String name;
-  final String? imageUrl;
-  final String breed;
-  final String age;
-  final String weight;
-  final String gender;
-  final List<String>? tags;
-  final Map<String, String>? additionalInfo;
+  final Pet pet;
   final VoidCallback? onEdit;
-  final VoidCallback? onTap;
-  final bool isLoading;
-  final String? ownerName;
-  final String? microchipId;
-  final List<VaccinationStatus>? vaccinations;
+  final VoidCallback? onViewMedical;
+  final VoidCallback? onViewAppointments;
+  final VoidCallback? onViewVaccinations;
+  final bool showStats;
+  final EdgeInsets padding;
+  final double imageSize;
 
   const PetProfileCard({
     Key? key,
-    required this.name,
-    this.imageUrl,
-    required this.breed,
-    required this.age,
-    required this.weight,
-    required this.gender,
-    this.tags,
-    this.additionalInfo,
+    required this.pet,
     this.onEdit,
-    this.onTap,
-    this.isLoading = false,
-    this.ownerName,
-    this.microchipId,
-    this.vaccinations,
+    this.onViewMedical,
+    this.onViewAppointments,
+    this.onViewVaccinations,
+    this.showStats = true,
+    this.padding = const EdgeInsets.all(16),
+    this.imageSize = 120,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return CustomCard(
-      onTap: isLoading ? null : onTap,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          _buildHeader(),
+          if (showStats) ...[
+            const Divider(),
+            _buildStats(),
+          ],
+          const Divider(),
+          _buildQuickActions(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: padding,
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.bottomRight,
             children: [
-              _buildPetImage(),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(context),
-                    const SizedBox(height: 8),
-                    _buildBasicInfo(context),
-                    if (tags != null && tags!.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _buildTags(context),
-                    ],
-                  ],
-                ),
-              ),
+              _buildProfileImage(),
+              if (onEdit != null)
+                _buildEditButton(),
             ],
           ),
-          if (additionalInfo != null || microchipId != null) ...[
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 16),
-            _buildAdditionalInfo(context),
-          ],
-          if (vaccinations != null && vaccinations!.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _buildVaccinations(context),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPetImage() {
-    return Container(
-      width: 100,
-      height: 100,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: AppTheme.lightBlue.withOpacity(0.1),
-      ),
-      child: imageUrl != null
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                imageUrl!,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                          : null,
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return const Icon(
-                    Icons.pets,
-                    color: AppTheme.primaryGreen,
-                    size: 40,
-                  );
-                },
-              ),
-            )
-          : const Icon(
-              Icons.pets,
-              color: AppTheme.primaryGreen,
-              size: 40,
-            ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Text(
-            name,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppTheme.primaryGreen,
-                  fontWeight: FontWeight.bold,
-                ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        if (onEdit != null)
-          IconButton(
-            icon: const Icon(Icons.edit),
-            color: AppTheme.primaryGreen,
-            onPressed: isLoading ? null : onEdit,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildBasicInfo(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          breed,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: AppTheme.secondaryGreen,
-              ),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            _buildInfoChip(context, age),
-            const SizedBox(width: 8),
-            _buildInfoChip(context, weight),
-            const SizedBox(width: 8),
-            _buildInfoChip(
-              context,
-              gender,
-              icon: gender.toLowerCase() == 'male'
-                  ? Icons.male
-                  : gender.toLowerCase() == 'female'
-                      ? Icons.female
-                      : null,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInfoChip(BuildContext context, String text, {IconData? icon}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppTheme.lightBlue.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(
-              icon,
-              size: 16,
-              color: AppTheme.primaryGreen,
-            ),
-            const SizedBox(width: 4),
-          ],
+          const SizedBox(height: 16),
           Text(
-            text,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.primaryGreen,
-                ),
+            pet.name,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimaryColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${pet.breed} • ${pet.age} years old',
+            style: const TextStyle(
+              fontSize: 16,
+              color: AppTheme.textSecondaryColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildStatusBadge(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileImage() {
+    return Container(
+      width: imageSize,
+      height: imageSize,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: AppTheme.primaryColor,
+          width: 3,
+        ),
+        image: DecorationImage(
+          image: NetworkImage(pet.imageUrl),
+          fit: BoxFit.cover,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTags(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: tags!.map((tag) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppTheme.primaryGreen.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            tag,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.primaryGreen,
-                ),
-          ),
-        );
-      }).toList(),
+  Widget _buildEditButton() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppTheme.primaryColor,
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        icon: const Icon(Icons.edit, color: Colors.white),
+        onPressed: onEdit,
+        constraints: const BoxConstraints(
+          minWidth: 40,
+          minHeight: 40,
+        ),
+      ),
     );
   }
 
-  Widget _buildAdditionalInfo(BuildContext context) {
+  Widget _buildStatusBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 6,
+      ),
+      decoration: BoxDecoration(
+        color: _getStatusColor().withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _getStatusColor(),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        pet.status,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: _getStatusColor(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStats() {
+    return Padding(
+      padding: padding,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildStatItem('Weight', '${pet.weight} kg'),
+          _buildStatItem('Gender', pet.gender),
+          if (pet.microchipId != null)
+            _buildStatItem('Microchip', pet.microchipId!),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (ownerName != null)
-          _buildInfoRow(context, 'Owner', ownerName!),
-        if (microchipId != null) ...[
-          if (ownerName != null) const SizedBox(height: 8),
-          _buildInfoRow(context, 'Microchip ID', microchipId!),
-        ],
-        if (additionalInfo != null) ...[
-          if (ownerName != null || microchipId != null)
-            const SizedBox(height: 8),
-          ...additionalInfo!.entries.map((entry) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _buildInfoRow(context, entry.key, entry.value),
-            );
-          }).toList(),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildInfoRow(BuildContext context, String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.neutralGrey,
-              ),
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textSecondaryColor,
+          ),
         ),
+        const SizedBox(height: 4),
         Text(
           value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.primaryGreen,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVaccinations(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Vaccinations',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: AppTheme.secondaryGreen,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: vaccinations!.map((vaccination) {
-            return _buildVaccinationChip(context, vaccination);
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVaccinationChip(
-      BuildContext context, VaccinationStatus vaccination) {
-    final Color statusColor;
-    final IconData statusIcon;
-
-    switch (vaccination.status) {
-      case VaccinationStatusType.upToDate:
-        statusColor = AppTheme.success;
-        statusIcon = Icons.check_circle;
-        break;
-      case VaccinationStatusType.due:
-        statusColor = AppTheme.warning;
-        statusIcon = Icons.access_time;
-        break;
-      case VaccinationStatusType.overdue:
-        statusColor = AppTheme.error;
-        statusIcon = Icons.warning;
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            statusIcon,
-            size: 16,
-            color: statusColor,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor,
           ),
-          const SizedBox(width: 4),
-          Text(
-            vaccination.name,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: statusColor,
-                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickActions() {
+    return Padding(
+      padding: padding,
+      child: Column(
+        children: [
+          _buildActionButton(
+            'Medical Records',
+            Icons.medical_information,
+            onViewMedical,
+          ),
+          const SizedBox(height: 8),
+          _buildActionButton(
+            'Appointments',
+            Icons.calendar_today,
+            onViewAppointments,
+          ),
+          const SizedBox(height: 8),
+          _buildActionButton(
+            'Vaccinations',
+            Icons.vaccines,
+            onViewVaccinations,
           ),
         ],
       ),
     );
   }
-}
 
-class VaccinationStatus {
-  final String name;
-  final VaccinationStatusType status;
-  final DateTime? dueDate;
+  Widget _buildActionButton(
+    String label,
+    IconData icon,
+    VoidCallback? onPressed,
+  ) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+    );
+  }
 
-  const VaccinationStatus({
-    required this.name,
-    required this.status,
-    this.dueDate,
-  });
-}
-
-enum VaccinationStatusType {
-  upToDate,
-  due,
-  overdue,
+  Color _getStatusColor() {
+    switch (pet.status.toLowerCase()) {
+      case 'active':
+        return Colors.green;
+      case 'inactive':
+        return Colors.grey;
+      case 'pending':
+        return Colors.orange;
+      default:
+        return AppTheme.primaryColor;
+    }
+  }
 }

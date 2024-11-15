@@ -1,159 +1,101 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:equatable/equatable.dart';
 
-enum FoodType {
-  dryFood,
-  wetFood,
-  freshFood,
-  rawFood,
-  treats,
-  supplement,
-  prescription
-}
-
-extension FoodTypeExtension on FoodType {
-  String get displayName {
-    switch (this) {
-      case FoodType.dryFood:
-        return 'Dry Food';
-      case FoodType.wetFood:
-        return 'Wet Food';
-      case FoodType.freshFood:
-        return 'Fresh Food';
-      case FoodType.rawFood:
-        return 'Raw Food';
-      case FoodType.treats:
-        return 'Treats';
-      case FoodType.supplement:
-        return 'Supplement';
-      case FoodType.prescription:
-        return 'Prescription Diet';
-    }
-  }
-
-  bool get requiresPrescription => this == FoodType.prescription;
-  bool get requiresRefrigeration => [FoodType.freshFood, FoodType.rawFood].contains(this);
-}
-
-class FoodItem extends Equatable {
+class FoodItem {
   final String id;
   final String name;
   final String brand;
+  final String category;
   final String type;
-  final double caloriesPerGram;
-  final Map<String, double>? nutrients;
-  final String? notes;
-  final DateTime createdAt;
-  final DateTime? updatedAt;
-  final bool isActive;
-  // Premium features
+  final Map<String, dynamic> nutritionalInfo;
   final List<String> ingredients;
-  final String? manufacturerId;
-  final String? batchNumber;
-  final DateTime? expirationDate;
-  final Map<String, String>? allergenInfo;
-  final List<String> certifications;
-  final String? countryOfOrigin;
-  final Map<String, dynamic>? nutritionalAnalysis;
-  final List<String> recommendedPetTypes;
-  final Map<String, dynamic>? feedingGuidelines;
-  final List<String> contraindicatedConditions;
-  final double? moistureContent;
-  final String? storageInstructions;
-  final Map<String, dynamic>? qualityMetrics;
-  final List<String>? images;
-  final bool isVeterinaryApproved;
-  final Map<String, dynamic>? palatabilityScores;
-  final double? averageRating;
+  final List<String> allergens;
+  final String? description;
+  final String? imageUrl;
+  final double? rating;
   final int reviewCount;
+  final Map<String, bool> dietaryFlags;
+  final List<String> lifestages;
+  final List<String> specialNeeds;
+  final Map<String, dynamic> servingInfo;
+  // New fields
+  final String? createdBy;
+  final DateTime createdAt;
+  final bool isPremium;
+  final List<String>? certifications;
+  final Map<String, dynamic>? metadata;
+  final double? price;
+  final String? currency;
+  final Map<String, dynamic>? availability;
+  final List<String>? variants;
+  final Map<String, dynamic>? storageInfo;
+  final DateTime? expirationDate;
+  final String? batchNumber;
+  final Map<String, dynamic>? qualityMetrics;
 
-  const FoodItem({
+  FoodItem({
     required this.id,
     required this.name,
     required this.brand,
+    required this.category,
     required this.type,
-    required this.caloriesPerGram,
-    this.nutrients,
-    this.notes,
-    DateTime? createdAt,
-    this.updatedAt,
-    this.isActive = true,
-    // Premium features
-    this.ingredients = const [],
-    this.manufacturerId,
-    this.batchNumber,
-    this.expirationDate,
-    this.allergenInfo,
-    this.certifications = const [],
-    this.countryOfOrigin,
-    this.nutritionalAnalysis,
-    this.recommendedPetTypes = const [],
-    this.feedingGuidelines,
-    this.contraindicatedConditions = const [],
-    this.moistureContent,
-    this.storageInstructions,
-    this.qualityMetrics,
-    this.images,
-    this.isVeterinaryApproved = false,
-    this.palatabilityScores,
-    this.averageRating,
+    required this.nutritionalInfo,
+    required this.ingredients,
+    this.allergens = const [],
+    this.description,
+    this.imageUrl,
+    this.rating,
     this.reviewCount = 0,
-  }) : createdAt = createdAt ?? DateTime.now();
-
-  // Firestore serialization
-  factory FoodItem.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return FoodItem.fromJson({
-      ...data,
-      'id': doc.id,
-    });
-  }
-
-  Map<String, dynamic> toFirestore() {
-    final json = toJson();
-    return {
-      ...json,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.now(),
-      'expirationDate': expirationDate != null 
-          ? Timestamp.fromDate(expirationDate!) 
-          : null,
-    };
-  }
+    this.dietaryFlags = const {},
+    this.lifestages = const [],
+    this.specialNeeds = const [],
+    this.servingInfo = const {},
+    this.createdBy,
+    DateTime? createdAt,
+    this.isPremium = false,
+    this.certifications,
+    this.metadata,
+    this.price,
+    this.currency,
+    this.availability,
+    this.variants,
+    this.storageInfo,
+    this.expirationDate,
+    this.batchNumber,
+    this.qualityMetrics,
+  }) : this.createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'name': name,
       'brand': brand,
+      'category': category,
       'type': type,
-      'caloriesPerGram': caloriesPerGram,
-      'nutrients': nutrients,
-      'notes': notes,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
-      'isActive': isActive,
+      'nutritionalInfo': nutritionalInfo,
       'ingredients': ingredients,
-      'manufacturerId': manufacturerId,
-      'batchNumber': batchNumber,
-      'expirationDate': expirationDate != null 
-          ? Timestamp.fromDate(expirationDate!) 
-          : null,
-      'allergenInfo': allergenInfo,
-      'certifications': certifications,
-      'countryOfOrigin': countryOfOrigin,
-      'nutritionalAnalysis': nutritionalAnalysis,
-      'recommendedPetTypes': recommendedPetTypes,
-      'feedingGuidelines': feedingGuidelines,
-      'contraindicatedConditions': contraindicatedConditions,
-      'moistureContent': moistureContent,
-      'storageInstructions': storageInstructions,
-      'qualityMetrics': qualityMetrics,
-      'images': images,
-      'isVeterinaryApproved': isVeterinaryApproved,
-      'palatabilityScores': palatabilityScores,
-      'averageRating': averageRating,
+      'allergens': allergens,
+      'description': description,
+      'imageUrl': imageUrl,
+      'rating': rating,
       'reviewCount': reviewCount,
+      'dietaryFlags': dietaryFlags,
+      'lifestages': lifestages,
+      'specialNeeds': specialNeeds,
+      'servingInfo': servingInfo,
+      'createdBy': createdBy,
+      'createdAt': createdAt.toIso8601String(),
+      'isPremium': isPremium,
+      'certifications': certifications,
+      'metadata': metadata,
+      'price': price,
+      'currency': currency,
+      'availability': availability,
+      'variants': variants,
+      'storageInfo': storageInfo,
+      'expirationDate': expirationDate?.toIso8601String(),
+      'batchNumber': batchNumber,
+      'qualityMetrics': qualityMetrics,
     };
   }
 
@@ -162,244 +104,105 @@ class FoodItem extends Equatable {
       id: json['id'],
       name: json['name'],
       brand: json['brand'],
+      category: json['category'],
       type: json['type'],
-      caloriesPerGram: json['caloriesPerGram'].toDouble(),
-      nutrients: json['nutrients'] != null
-          ? Map<String, double>.from(json['nutrients'])
-          : null,
-      notes: json['notes'],
-      createdAt: (json['createdAt'] as Timestamp).toDate(),
-      updatedAt: json['updatedAt'] != null
-          ? (json['updatedAt'] as Timestamp).toDate()
-          : null,
-      isActive: json['isActive'] ?? true,
-      ingredients: List<String>.from(json['ingredients'] ?? []),
-      manufacturerId: json['manufacturerId'],
-      batchNumber: json['batchNumber'],
-      expirationDate: json['expirationDate'] != null
-          ? (json['expirationDate'] as Timestamp).toDate()
-          : null,
-      allergenInfo: json['allergenInfo'] != null
-          ? Map<String, String>.from(json['allergenInfo'])
-          : null,
-      certifications: List<String>.from(json['certifications'] ?? []),
-      countryOfOrigin: json['countryOfOrigin'],
-      nutritionalAnalysis: json['nutritionalAnalysis'],
-      recommendedPetTypes: List<String>.from(json['recommendedPetTypes'] ?? []),
-      feedingGuidelines: json['feedingGuidelines'],
-      contraindicatedConditions: 
-          List<String>.from(json['contraindicatedConditions'] ?? []),
-      moistureContent: json['moistureContent']?.toDouble(),
-      storageInstructions: json['storageInstructions'],
-      qualityMetrics: json['qualityMetrics'],
-      images: json['images'] != null ? List<String>.from(json['images']) : null,
-      isVeterinaryApproved: json['isVeterinaryApproved'] ?? false,
-      palatabilityScores: json['palatabilityScores'],
-      averageRating: json['averageRating']?.toDouble(),
+      nutritionalInfo: Map<String, dynamic>.from(json['nutritionalInfo']),
+      ingredients: List<String>.from(json['ingredients']),
+      allergens: List<String>.from(json['allergens'] ?? []),
+      description: json['description'],
+      imageUrl: json['imageUrl'],
+      rating: json['rating']?.toDouble(),
       reviewCount: json['reviewCount'] ?? 0,
+      dietaryFlags: Map<String, bool>.from(json['dietaryFlags'] ?? {}),
+      lifestages: List<String>.from(json['lifestages'] ?? []),
+      specialNeeds: List<String>.from(json['specialNeeds'] ?? []),
+      servingInfo: Map<String, dynamic>.from(json['servingInfo'] ?? {}),
+      createdBy: json['createdBy'],
+      createdAt: json['createdAt'] != null 
+          ? DateTime.parse(json['createdAt'])
+          : null,
+      isPremium: json['isPremium'] ?? false,
+      certifications: json['certifications'] != null 
+          ? List<String>.from(json['certifications'])
+          : null,
+      metadata: json['metadata'],
+      price: json['price']?.toDouble(),
+      currency: json['currency'],
+      availability: json['availability'],
+      variants: json['variants'] != null 
+          ? List<String>.from(json['variants'])
+          : null,
+      storageInfo: json['storageInfo'],
+      expirationDate: json['expirationDate'] != null 
+          ? DateTime.parse(json['expirationDate'])
+          : null,
+      batchNumber: json['batchNumber'],
+      qualityMetrics: json['qualityMetrics'],
     );
   }
 
-  // Helper methods
-  bool isExpired() {
-    if (expirationDate == null) return false;
-    return DateTime.now().isAfter(expirationDate!);
-  }
+  bool hasAllergen(String allergen) => 
+      allergens.contains(allergen.toLowerCase());
 
-  bool isExpiringSoon({int daysThreshold = 30}) {
-    if (expirationDate == null) return false;
-    final daysUntilExpiry = expirationDate!.difference(DateTime.now()).inDays;
-    return daysUntilExpiry <= daysThreshold && daysUntilExpiry > 0;
-  }
+  bool isGrainFree() => 
+      !ingredients.any((i) => i.toLowerCase().contains('grain'));
 
-  bool containsAllergen(String allergen) {
-    return allergenInfo?.containsKey(allergen.toLowerCase()) ?? false ||
-           ingredients.any((i) => i.toLowerCase().contains(allergen.toLowerCase()));
-  }
+  bool isDairyFree() => 
+      !ingredients.any((i) => i.toLowerCase().contains('dairy'));
 
-  bool isRecommendedFor(String petType) {
-    return recommendedPetTypes.isEmpty || 
-           recommendedPetTypes.contains(petType.toLowerCase());
-  }
+  bool isAppropriateFor(String lifestage) => 
+      lifestages.contains(lifestage);
 
-  bool hasContraindication(String condition) {
-    return contraindicatedConditions
-        .any((c) => c.toLowerCase() == condition.toLowerCase());
-  }
+  bool meetsSpecialNeed(String need) => 
+      specialNeeds.contains(need);
 
-  String getFormattedRating() {
-    if (averageRating == null) return 'Not rated';
-    return '${averageRating!.toStringAsFixed(1)} ⭐ ($reviewCount reviews)';
-  }
+  String getFormattedPrice() => 
+      price != null ? '$currency ${price!.toStringAsFixed(2)}' : 'N/A';
 
-  bool meetsQualityStandard(String metric, double threshold) {
-    return qualityMetrics?[metric]?.toDouble() ?? 0 >= threshold;
-  }
+  bool isExpired() => 
+      expirationDate != null && expirationDate!.isBefore(DateTime.now());
 
-  // New helper methods
-  bool requiresSpecialHandling() {
-    final foodType = FoodType.values.firstWhere(
-      (e) => e.displayName.toLowerCase() == type.toLowerCase(),
-      orElse: () => FoodType.dryFood,
-    );
-    return foodType.requiresRefrigeration || 
-           moistureContent != null && moistureContent! > 20;
-  }
+  bool canEdit(String userId) => createdBy == userId || !isPremium;
 
-  Map<String, dynamic> getNutritionalSummary() {
-    return {
-      'calories': caloriesPerGram,
-      'nutrients': nutrients,
-      'moisture': moistureContent,
-      'analysis': nutritionalAnalysis,
-    };
-  }
+  double getServingSize(String petSize) => 
+      (servingInfo[petSize] ?? servingInfo['default'] ?? 1.0).toDouble();
 
-  List<String> getWarnings() {
-    final warnings = <String>[];
+  List<String> getNutritionalHighlights() {
+    final highlights = <String>[];
+    final info = nutritionalInfo;
     
-    if (isExpired()) {
-      warnings.add('Food has expired');
-    } else if (isExpiringSoon()) {
-      warnings.add('Food is expiring soon');
-    }
-
-    if (requiresSpecialHandling()) {
-      warnings.add('Requires special storage');
-    }
-
-    if (type.toLowerCase() == FoodType.prescription.displayName.toLowerCase() && 
-        !isVeterinaryApproved) {
-      warnings.add('Requires veterinary approval');
-    }
-
-    return warnings;
+    if ((info['protein'] ?? 0) > 25) highlights.add('High Protein');
+    if ((info['fiber'] ?? 0) > 5) highlights.add('High Fiber');
+    if ((info['omega3'] ?? 0) > 0.5) highlights.add('Contains Omega-3');
+    
+    return highlights;
   }
+}
 
-  // Validation
-  List<String> validate() {
-    final errors = <String>[];
+enum FoodCategory {
+  dryFood,
+  wetFood,
+  treats,
+  supplements,
+  prescription,
+  raw,
+  frozenRaw,
+  dehydrated,
+  freshCooked
+}
 
-    if (name.isEmpty) {
-      errors.add('Name is required');
+extension FoodCategoryExtension on FoodCategory {
+  String get displayName {
+    switch (this) {
+      case FoodCategory.dryFood: return 'Dry Food';
+      case FoodCategory.wetFood: return 'Wet Food';
+      case FoodCategory.treats: return 'Treats';
+      case FoodCategory.supplements: return 'Supplements';
+      case FoodCategory.prescription: return 'Prescription Diet';
+      case FoodCategory.raw: return 'Raw Food';
+      case FoodCategory.frozenRaw: return 'Frozen Raw';
+      case FoodCategory.dehydrated: return 'Dehydrated';
+      case FoodCategory.freshCooked: return 'Fresh Cooked';
     }
-
-    if (brand.isEmpty) {
-      errors.add('Brand is required');
-    }
-
-    if (caloriesPerGram <= 0) {
-      errors.add('Invalid calorie content');
-    }
-
-    if (isExpired()) {
-      errors.add('Food has expired');
-    }
-
-    if (type.toLowerCase() == FoodType.prescription.displayName.toLowerCase() && 
-        !isVeterinaryApproved) {
-      errors.add('Prescription food requires veterinary approval');
-    }
-
-    return errors;
   }
-
-  // CopyWith method
-  FoodItem copyWith({
-    String? id,
-    String? name,
-    String? brand,
-    String? type,
-    double? caloriesPerGram,
-    Map<String, double>? nutrients,
-    String? notes,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-    bool? isActive,
-    List<String>? ingredients,
-    String? manufacturerId,
-    String? batchNumber,
-    DateTime? expirationDate,
-    Map<String, String>? allergenInfo,
-    List<String>? certifications,
-    String? countryOfOrigin,
-    Map<String, dynamic>? nutritionalAnalysis,
-    List<String>? recommendedPetTypes,
-    Map<String, dynamic>? feedingGuidelines,
-    List<String>? contraindicatedConditions,
-    double? moistureContent,
-    String? storageInstructions,
-    Map<String, dynamic>? qualityMetrics,
-    List<String>? images,
-    bool? isVeterinaryApproved,
-    Map<String, dynamic>? palatabilityScores,
-    double? averageRating,
-    int? reviewCount,
-  }) {
-    return FoodItem(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      brand: brand ?? this.brand,
-      type: type ?? this.type,
-      caloriesPerGram: caloriesPerGram ?? this.caloriesPerGram,
-      nutrients: nutrients ?? this.nutrients,
-      notes: notes ?? this.notes,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      isActive: isActive ?? this.isActive,
-      ingredients: ingredients ?? this.ingredients,
-      manufacturerId: manufacturerId ?? this.manufacturerId,
-      batchNumber: batchNumber ?? this.batchNumber,
-      expirationDate: expirationDate ?? this.expirationDate,
-      allergenInfo: allergenInfo ?? this.allergenInfo,
-      certifications: certifications ?? this.certifications,
-      countryOfOrigin: countryOfOrigin ?? this.countryOfOrigin,
-      nutritionalAnalysis: nutritionalAnalysis ?? this.nutritionalAnalysis,
-      recommendedPetTypes: recommendedPetTypes ?? this.recommendedPetTypes,
-      feedingGuidelines: feedingGuidelines ?? this.feedingGuidelines,
-      contraindicatedConditions: contraindicatedConditions ?? this.contraindicatedConditions,
-      moistureContent: moistureContent ?? this.moistureContent,
-      storageInstructions: storageInstructions ?? this.storageInstructions,
-      qualityMetrics: qualityMetrics ?? this.qualityMetrics,
-      images: images ?? this.images,
-      isVeterinaryApproved: isVeterinaryApproved ?? this.isVeterinaryApproved,
-      palatabilityScores: palatabilityScores ?? this.palatabilityScores,
-      averageRating: averageRating ?? this.averageRating,
-      reviewCount: reviewCount ?? this.reviewCount,
-    );
-  }
-
-  // Equatable
-  @override
-  List<Object?> get props => [
-    id,
-    name,
-    brand,
-    type,
-    caloriesPerGram,
-    nutrients,
-    notes,
-    createdAt,
-    updatedAt,
-    isActive,
-    ingredients,
-    manufacturerId,
-    batchNumber,
-    expirationDate,
-    allergenInfo,
-    certifications,
-    countryOfOrigin,
-    nutritionalAnalysis,
-    recommendedPetTypes,
-    feedingGuidelines,
-    contraindicatedConditions,
-    moistureContent,
-    storageInstructions,
-    qualityMetrics,
-    images,
-    isVeterinaryApproved,
-    palatabilityScores,
-    averageRating,
-    reviewCount,
-  ];
 }

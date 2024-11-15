@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
+import '../models/symptom.dart';
 import '../theme/app_theme.dart';
 
 class SymptomSelector extends StatefulWidget {
   final List<Symptom> symptoms;
-  final List<String> selectedSymptoms;
-  final ValueChanged<List<String>> onChanged;
+  final List<Symptom> selectedSymptoms;
+  final ValueChanged<List<Symptom>> onChanged;
+  final int? maxSelections;
+  final bool showSeverity;
+  final bool showDuration;
+  final bool grouped;
   final String? title;
   final String? subtitle;
-  final bool showCategories;
-  final bool multiSelect;
-  final bool showSearch;
-  final bool isLoading;
 
   const SymptomSelector({
     Key? key,
     required this.symptoms,
     required this.selectedSymptoms,
     required this.onChanged,
+    this.maxSelections,
+    this.showSeverity = true,
+    this.showDuration = true,
+    this.grouped = true,
     this.title,
     this.subtitle,
-    this.showCategories = true,
-    this.multiSelect = true,
-    this.showSearch = true,
-    this.isLoading = false,
   }) : super(key: key);
 
   @override
@@ -30,51 +31,17 @@ class SymptomSelector extends StatefulWidget {
 }
 
 class _SymptomSelectorState extends State<SymptomSelector> {
-  late TextEditingController _searchController;
-  String _searchQuery = '';
-  String? _selectedCategory;
+  final Map<String, double> _severityLevels = {};
+  final Map<String, Duration> _durations = {};
 
   @override
   void initState() {
     super.initState();
-    _searchController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  List<Symptom> get filteredSymptoms {
-    return widget.symptoms.where((symptom) {
-      final matchesSearch = symptom.name
-          .toLowerCase()
-          .contains(_searchQuery.toLowerCase());
-      final matchesCategory =
-          !widget.showCategories || _selectedCategory == null || symptom.category == _selectedCategory;
-      return matchesSearch && matchesCategory;
-    }).toList();
-  }
-
-  Set<String> get categories {
-    return widget.symptoms.map((s) => s.category).toSet();
-  }
-
-  void _toggleSymptom(String symptomName) {
-    final List<String> updatedSelection = List.from(widget.selectedSymptoms);
-    if (widget.multiSelect) {
-      if (updatedSelection.contains(symptomName)) {
-        updatedSelection.remove(symptomName);
-      } else {
-        updatedSelection.add(symptomName);
-      }
-    } else {
-      updatedSelection
-        ..clear()
-        ..add(symptomName);
+    // Initialize severity and duration for selected symptoms
+    for (var symptom in widget.selectedSymptoms) {
+      _severityLevels[symptom.id] = symptom.severity ?? 1.0;
+      _durations[symptom.id] = symptom.duration ?? const Duration(hours: 1);
     }
-    widget.onChanged(updatedSelection);
   }
 
   @override
@@ -85,121 +52,66 @@ class _SymptomSelectorState extends State<SymptomSelector> {
         if (widget.title != null) ...[
           Text(
             widget.title!,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppTheme.primaryGreen,
-                  fontWeight: FontWeight.bold,
-                ),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimaryColor,
+            ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
         ],
         if (widget.subtitle != null) ...[
           Text(
             widget.subtitle!,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.neutralGrey,
-                ),
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppTheme.textSecondaryColor,
+            ),
           ),
           const SizedBox(height: 16),
         ],
-        if (widget.showSearch)
-          _buildSearchField(),
-        if (widget.showCategories && categories.length > 1) ...[
-          const SizedBox(height: 16),
-          _buildCategoryChips(),
-        ],
-        const SizedBox(height: 16),
-        if (widget.isLoading)
-          const Center(child: CircularProgressIndicator())
-        else if (filteredSymptoms.isEmpty)
-          Center(
-            child: Text(
-              'No symptoms found',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.neutralGrey,
-                  ),
-            ),
-          )
-        else
-          _buildSymptomGrid(),
+        widget.grouped
+            ? _buildGroupedSymptoms()
+            : _buildSymptomGrid(),
       ],
     );
   }
 
-  Widget _buildSearchField() {
-    return TextField(
-      controller: _searchController,
-      decoration: InputDecoration(
-        hintText: 'Search symptoms',
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: _searchQuery.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () {
-                  setState(() {
-                    _searchController.clear();
-                    _searchQuery = '';
-                  });
-                },
-              )
-            : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(
-            color: AppTheme.neutralGrey.withOpacity(0.3),
-          ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(
-            color: AppTheme.neutralGrey.withOpacity(0.3),
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: AppTheme.primaryGreen,
-          ),
-        ),
-      ),
-      onChanged: (value) {
-        setState(() {
-          _searchQuery = value;
-        });
-      },
-    );
-  }
+  Widget _buildGroupedSymptoms() {
+    final groupedSymptoms = <String, List<Symptom>>{};
+    for (var symptom in widget.symptoms) {
+      groupedSymptoms.putIfAbsent(symptom.category, () => []).add(symptom);
+    }
 
-  Widget _buildCategoryChips() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          FilterChip(
-            label: const Text('All'),
-            selected: _selectedCategory == null,
-            onSelected: (selected) {
-              setState(() {
-                _selectedCategory = null;
-              });
-            },
-          ),
-          const SizedBox(width: 8),
-          ...categories.map((category) {
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: FilterChip(
-                label: Text(category),
-                selected: _selectedCategory == category,
-                onSelected: (selected) {
-                  setState(() {
-                    _selectedCategory = selected ? category : null;
-                  });
-                },
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: groupedSymptoms.length,
+      itemBuilder: (context, index) {
+        final category = groupedSymptoms.keys.elementAt(index);
+        final symptoms = groupedSymptoms[category]!;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                category,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimaryColor,
+                ),
               ),
-            );
-          }),
-        ],
-      ),
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: symptoms.map((symptom) => _buildSymptomChip(symptom)).toList(),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -207,45 +119,152 @@ class _SymptomSelectorState extends State<SymptomSelector> {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: filteredSymptoms.map((symptom) {
-        final isSelected = widget.selectedSymptoms.contains(symptom.name);
-        return ChoiceChip(
-          label: Text(symptom.name),
-          selected: isSelected,
-          onSelected: (_) => _toggleSymptom(symptom.name),
-          selectedColor: AppTheme.primaryGreen.withOpacity(0.2),
-          backgroundColor: AppTheme.lightBlue.withOpacity(0.1),
-          labelStyle: TextStyle(
-            color: isSelected ? AppTheme.primaryGreen : AppTheme.neutralGrey,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-          avatar: symptom.icon != null
-              ? Icon(
-                  symptom.icon,
-                  size: 18,
-                  color: isSelected ? AppTheme.primaryGreen : AppTheme.neutralGrey,
-                )
-              : null,
-        );
-      }).toList(),
+      children: widget.symptoms.map((symptom) => _buildSymptomChip(symptom)).toList(),
     );
   }
-}
 
-class Symptom {
-  final String name;
-  final String category;
-  final IconData? icon;
-  final String? description;
-  final List<String>? relatedSymptoms;
-  final bool isEmergency;
+  Widget _buildSymptomChip(Symptom symptom) {
+    final isSelected = widget.selectedSymptoms.contains(symptom);
+    final canSelect = !isSelected && 
+        (widget.maxSelections == null || 
+         widget.selectedSymptoms.length < widget.maxSelections!);
 
-  const Symptom({
-    required this.name,
-    required this.category,
-    this.icon,
-    this.description,
-    this.relatedSymptoms,
-    this.isEmergency = false,
-  });
+    return FilterChip(
+      label: Text(symptom.name),
+      selected: isSelected,
+      onSelected: canSelect || isSelected ? (selected) {
+        final updatedSymptoms = List<Symptom>.from(widget.selectedSymptoms);
+        if (selected) {
+          updatedSymptoms.add(symptom);
+          _severityLevels[symptom.id] = 1.0;
+          _durations[symptom.id] = const Duration(hours: 1);
+        } else {
+          updatedSymptoms.removeWhere((s) => s.id == symptom.id);
+          _severityLevels.remove(symptom.id);
+          _durations.remove(symptom.id);
+        }
+        widget.onChanged(updatedSymptoms);
+        if (selected) {
+          _showSymptomDetailsDialog(symptom);
+        }
+      } : null,
+      backgroundColor: Colors.transparent,
+      selectedColor: AppTheme.primaryColor.withOpacity(0.2),
+      checkmarkColor: AppTheme.primaryColor,
+      side: BorderSide(
+        color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor,
+      ),
+    );
+  }
+
+  Future<void> _showSymptomDetailsDialog(Symptom symptom) async {
+    if (!widget.showSeverity && !widget.showDuration) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(symptom.name),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.showSeverity)
+              _buildSeveritySlider(symptom),
+            if (widget.showDuration)
+              _buildDurationSelector(symptom),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+
+    final updatedSymptoms = widget.selectedSymptoms.map((s) {
+      if (s.id == symptom.id) {
+        return s.copyWith(
+          severity: _severityLevels[s.id],
+          duration: _durations[s.id],
+        );
+      }
+      return s;
+    }).toList();
+
+    widget.onChanged(updatedSymptoms);
+  }
+
+  Widget _buildSeveritySlider(Symptom symptom) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Severity',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Slider(
+          value: _severityLevels[symptom.id] ?? 1.0,
+          min: 1.0,
+          max: 10.0,
+          divisions: 9,
+          label: (_severityLevels[symptom.id] ?? 1.0).toInt().toString(),
+          onChanged: (value) {
+            setState(() {
+              _severityLevels[symptom.id] = value;
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDurationSelector(Symptom symptom) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Duration',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButton<Duration>(
+          value: _durations[symptom.id] ?? const Duration(hours: 1),
+          items: [
+            DropdownMenuItem(
+              value: const Duration(hours: 1),
+              child: const Text('1 hour'),
+            ),
+            DropdownMenuItem(
+              value: const Duration(hours: 6),
+              child: const Text('6 hours'),
+            ),
+            DropdownMenuItem(
+              value: const Duration(days: 1),
+              child: const Text('1 day'),
+            ),
+            DropdownMenuItem(
+              value: const Duration(days: 3),
+              child: const Text('3 days'),
+            ),
+            DropdownMenuItem(
+              value: const Duration(days: 7),
+              child: const Text('1 week'),
+            ),
+          ],
+          onChanged: (value) {
+            setState(() {
+              _durations[symptom.id] = value!;
+            });
+          },
+        ),
+      ],
+    );
+  }
 }

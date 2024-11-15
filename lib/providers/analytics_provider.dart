@@ -1,48 +1,95 @@
-// lib/providers/analytics_provider.dart
-
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import '../services/pet_service.dart';
 import '../models/pet.dart';
+import '../utils/logger.dart';
+import 'dart:async';
+import 'dart:math';
 
 class AnalyticsProvider with ChangeNotifier {
-  final PetService _petService = PetService();
+  final PetService _petService;
+  final FirebaseFirestore _firestore;
+  final FirebaseAnalytics _analytics;
+  final Logger _logger;
+  
   Map<String, Map<String, dynamic>> _analyticsData = {};
   Map<String, DateTime> _lastUpdated = {};
   Map<String, bool> _isRefreshing = {};
   bool _isLoading = false;
   String? _error;
-  Duration _cacheExpiration = const Duration(hours: 1);
+  Timer? _refreshTimer;
+  final Duration _cacheExpiration;
+  final Duration _refreshInterval;
+
+  AnalyticsProvider({
+    PetService? petService,
+    FirebaseFirestore? firestore,
+    FirebaseAnalytics? analytics,
+    Logger? logger,
+    Duration? cacheExpiration,
+    Duration? refreshInterval,
+  }) : _petService = petService ?? PetService(),
+       _firestore = firestore ?? FirebaseFirestore.instance,
+       _analytics = analytics ?? FirebaseAnalytics.instance,
+       _logger = logger ?? Logger(),
+       _cacheExpiration = cacheExpiration ?? const Duration(hours: 1),
+       _refreshInterval = refreshInterval ?? const Duration(minutes: 15) {
+    _setupPeriodicRefresh();
+  }
 
   // Getters
   bool get isLoading => _isLoading;
   String? get error => _error;
   Map<String, DateTime> get lastUpdated => _lastUpdated;
 
-  // Check if analytics need refresh
+  void _setupPeriodicRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(_refreshInterval, (_) {
+      _refreshAllAnalytics(silent: true);
+    });
+  }
+
+  Future<void> _refreshAllAnalytics({bool silent = false}) async {
+    try {
+      for (var petId in _analyticsData.keys) {
+        if (_needsRefresh(petId)) {
+          await loadAnalytics(petId, silent: silent);
+        }
+      }
+    } catch (e, stackTrace) {
+      _logger.error('Failed to refresh analytics', e, stackTrace);
+    }
+  }
+
   bool _needsRefresh(String petId) {
     final lastUpdate = _lastUpdated[petId];
     if (lastUpdate == null) return true;
-    
     return DateTime.now().difference(lastUpdate) > _cacheExpiration;
   }
 
-  // Get analytics with optional refresh
   Future<Map<String, dynamic>?> getAnalyticsForPet(
     String petId, {
     bool forceRefresh = false,
+    AnalyticsConfig? config,
   }) async {
-    if (forceRefresh || _needsRefresh(petId)) {
-      await loadAnalytics(petId);
+    try {
+      if (forceRefresh || _needsRefresh(petId)) {
+        await loadAnalytics(petId, config: config);
+      }
+      return _analyticsData[petId];
+    } catch (e, stackTrace) {
+      _logger.error('Failed to get analytics for pet', e, stackTrace);
+      rethrow;
     }
-    return _analyticsData[petId];
   }
 
-  // Load analytics with improved error handling
   Future<void> loadAnalytics(
     String petId, {
     DateTime? startDate,
     DateTime? endDate,
     bool silent = false,
+    AnalyticsConfig? config,
   }) async {
     if (_isRefreshing[petId] == true) return;
 
@@ -54,20 +101,43 @@ class AnalyticsProvider with ChangeNotifier {
 
       _isRefreshing[petId] = true;
 
-      final analytics = await _petService.getAnalytics(
-        petId: petId,
-        startDate: startDate ?? DateTime.now().subtract(const Duration(days: 30)),
-        endDate: endDate ?? DateTime.now(),
+      // Load from Firestore first
+      final firestoreData = await _loadFromFirestore(petId);
+      
+      // If Firestore data is fresh enough, use it
+      if (firestoreData != null && 
+          _isDataFresh(firestoreData['timestamp'] as Timestamp?)) {
+        _updateAnalyticsData(petId, firestoreData['data'] as Map<String, dynamic>);
+      } else {
+        // Otherwise fetch fresh data
+        final analytics = await _petService.getAnalytics(
+          petId: petId,
+          startDate: startDate ?? DateTime.now().subtract(const Duration(days: 30)),
+          endDate: endDate ?? DateTime.now(),
+        );
+
+        _validateAnalyticsData(analytics);
+        final processedData = _processAnalyticsData(analytics);
+        
+        // Store in Firestore for caching
+        await _saveToFirestore(petId, processedData);
+        
+        _updateAnalyticsData(petId, processedData);
+      }
+
+      // Log successful analytics load
+      await _analytics.logEvent(
+        name: 'analytics_loaded',
+        parameters: {
+          'pet_id': petId,
+          'data_source': firestoreData != null ? 'cache' : 'fresh',
+        },
       );
 
-      _validateAnalyticsData(analytics);
-      
-      _analyticsData[petId] = _processAnalyticsData(analytics);
-      _lastUpdated[petId] = DateTime.now();
       _error = null;
-
     } catch (e, stackTrace) {
       _error = _handleError(e, stackTrace);
+      _logger.error('Failed to load analytics', e, stackTrace);
     } finally {
       _isRefreshing[petId] = false;
       _isLoading = false;
@@ -75,7 +145,47 @@ class AnalyticsProvider with ChangeNotifier {
     }
   }
 
-  // Validate analytics data
+  Future<Map<String, dynamic>?> _loadFromFirestore(String petId) async {
+    try {
+      final doc = await _firestore
+          .collection('pet_analytics')
+          .doc(petId)
+          .get();
+      
+      return doc.data();
+    } catch (e, stackTrace) {
+      _logger.error('Failed to load from Firestore', e, stackTrace);
+      return null;
+    }
+  }
+
+  Future<void> _saveToFirestore(
+    String petId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      await _firestore
+          .collection('pet_analytics')
+          .doc(petId)
+          .set({
+        'data': data,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e, stackTrace) {
+      _logger.error('Failed to save to Firestore', e, stackTrace);
+    }
+  }
+
+  bool _isDataFresh(Timestamp? timestamp) {
+    if (timestamp == null) return false;
+    return DateTime.now().difference(timestamp.toDate()) <= _cacheExpiration;
+  }
+
+  void _updateAnalyticsData(String petId, Map<String, dynamic> data) {
+    _analyticsData[petId] = data;
+    _lastUpdated[petId] = DateTime.now();
+  }
+
   void _validateAnalyticsData(Map<String, dynamic> data) {
     final requiredFields = [
       'wellnessScore',
@@ -90,23 +200,26 @@ class AnalyticsProvider with ChangeNotifier {
     }
   }
 
-  // Process and normalize analytics data
   Map<String, dynamic> _processAnalyticsData(Map<String, dynamic> raw) {
     return {
       ...raw,
       'wellnessScore': _normalizeWellnessScore(raw['wellnessScore']),
       'healthTrends': _normalizeHealthTrends(raw['healthTrends']),
+      'behaviorTrends': _processBehaviorTrends(raw['behaviorTrends']),
       'timestamp': DateTime.now().toIso8601String(),
+      'metadata': {
+        'processingVersion': '2.0',
+        'dataPoints': raw['dataPoints'] ?? 0,
+        'confidence': _calculateConfidenceScore(raw),
+      },
     };
   }
 
-  // Normalize wellness score
   double _normalizeWellnessScore(dynamic score) {
     if (score is! num) return 0.0;
     return score.clamp(0.0, 100.0).toDouble();
   }
 
-  // Normalize health trends
   Map<String, dynamic> _normalizeHealthTrends(Map<String, dynamic> trends) {
     return trends.map((key, value) {
       if (value is num) {
@@ -116,20 +229,126 @@ class AnalyticsProvider with ChangeNotifier {
     });
   }
 
-  // Error handling
+  Map<String, dynamic> _processBehaviorTrends(Map<String, dynamic> trends) {
+    final processed = <String, dynamic>{};
+    
+    for (var entry in trends.entries) {
+      if (entry.value is List) {
+        processed[entry.key] = _calculateTrendMetrics(entry.value as List);
+      } else {
+        processed[entry.key] = entry.value;
+      }
+    }
+    
+    return processed;
+  }
+
+  Map<String, dynamic> _calculateTrendMetrics(List data) {
+    if (data.isEmpty) return {'trend': 'insufficient_data'};
+
+    final numericData = data
+        .whereType<num>()
+        .map((e) => e.toDouble())
+        .toList();
+
+    if (numericData.isEmpty) return {'trend': 'invalid_data'};
+
+    return {
+      'mean': _calculateMean(numericData),
+      'median': _calculateMedian(numericData),
+      'stdDev': _calculateStandardDeviation(numericData),
+      'trend': _determineTrend(numericData),
+      'confidence': _calculateConfidence(numericData),
+    };
+  }
+
+  double _calculateMean(List<double> values) {
+    return values.reduce((a, b) => a + b) / values.length;
+  }
+
+  double _calculateMedian(List<double> values) {
+    final sorted = List<double>.from(values)..sort();
+    final middle = sorted.length ~/ 2;
+    
+    if (sorted.length.isOdd) {
+      return sorted[middle];
+    }
+    
+    return (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
+  double _calculateStandardDeviation(List<double> values) {
+    final mean = _calculateMean(values);
+    final squaredDiffs = values.map((value) => pow(value - mean, 2));
+    return sqrt(squaredDiffs.reduce((a, b) => a + b) / values.length);
+  }
+
+  String _determineTrend(List<double> values) {
+    if (values.length < 2) return 'insufficient_data';
+
+    final changes = List.generate(
+      values.length - 1,
+      (i) => values[i + 1] - values[i],
+    );
+
+    final positiveChanges = changes.where((c) => c > 0).length;
+    final negativeChanges = changes.where((c) => c < 0).length;
+    final totalChanges = changes.length;
+
+    if (positiveChanges / totalChanges > 0.7) return 'strongly_improving';
+    if (positiveChanges / totalChanges > 0.5) return 'improving';
+    if (negativeChanges / totalChanges > 0.7) return 'strongly_declining';
+    if (negativeChanges / totalChanges > 0.5) return 'declining';
+    return 'stable';
+  }
+
+  double _calculateConfidence(List<double> values) {
+    final stdDev = _calculateStandardDeviation(values);
+    final mean = _calculateMean(values);
+    
+    // Coefficient of variation
+    final cv = (stdDev / mean).abs();
+    
+    // Convert to confidence score (0-1)
+    return (1 - cv).clamp(0.0, 1.0);
+  }
+
+  double _calculateConfidenceScore(Map<String, dynamic> data) {
+    final factors = <double>[];
+    
+    // Data completeness
+    final requiredFields = ['wellnessScore', 'healthTrends', 'behaviorTrends'];
+    final completeness = requiredFields
+        .where((field) => data.containsKey(field))
+        .length / requiredFields.length;
+    factors.add(completeness);
+    
+    // Data freshness
+    if (data.containsKey('timestamp')) {
+      final age = DateTime.now().difference(
+        DateTime.parse(data['timestamp'] as String)
+      ).inHours;
+      factors.add(1 - (age / 24).clamp(0.0, 1.0));
+    }
+    
+    // Data volume
+    final dataPoints = data['dataPoints'] as int? ?? 0;
+    factors.add((dataPoints / 100).clamp(0.0, 1.0));
+    
+    return factors.reduce((a, b) => a + b) / factors.length;
+  }
+
   String _handleError(dynamic error, StackTrace stackTrace) {
-    // Log error for debugging
-    debugPrint('Analytics Error: $error');
-    debugPrint('StackTrace: $stackTrace');
+    _logger.error('Analytics Error', error, stackTrace);
 
     if (error is AnalyticsException) {
       return error.message;
     }
 
-    return 'Failed to load analytics: ${error.toString()}';
+    return 'Failed to process analytics: ${error.toString()}';
   }
 
-  // Get wellness score trends with validation
+  // Public methods for accessing processed analytics
   Map<String, dynamic> getWellnessTrends(String petId) {
     final analytics = _analyticsData[petId];
     if (analytics == null) return _getEmptyWellnessTrends();
@@ -140,6 +359,7 @@ class AnalyticsProvider with ChangeNotifier {
       'components': analytics['scoreComponents'] ?? {},
       'history': analytics['scoreHistory'] ?? [],
       'lastUpdated': analytics['timestamp'],
+      'confidence': analytics['metadata']?['confidence'] ?? 0.0,
     };
   }
 
@@ -150,10 +370,10 @@ class AnalyticsProvider with ChangeNotifier {
       'components': {},
       'history': [],
       'lastUpdated': null,
+      'confidence': 0.0,
     };
   }
 
-  // Additional methods remain the same...
   Map<String, dynamic> getHealthMetricsAnalysis(String petId) {
     final analytics = _analyticsData[petId];
     if (analytics == null) return {};
@@ -168,167 +388,41 @@ class AnalyticsProvider with ChangeNotifier {
     return analytics['behaviorTrends'] ?? {};
   }
 
-  Map<String, dynamic> getCareTeamEffectiveness(String petId) {
-    final analytics = _analyticsData[petId];
-    if (analytics == null) return {};
+  Future<Map<String, dynamic>> generateComprehensiveReport(String petId) async {
+    try {
+      await loadAnalytics(petId, forceRefresh: true);
+      
+      final analytics = _analyticsData[petId];
+      if (analytics == null) return {};
 
-    return {
-      'memberEngagement': analytics['memberEngagement'] ?? {},
-      'taskCompletion': analytics['taskCompletion'] ?? {},
-      'responseTime': analytics['responseTime'] ?? {},
-    };
-  }
-
-  // ... (rest of the methods)
-}
-
-class AnalyticsException implements Exception {
-  final String message;
-  AnalyticsException(this.message);
-
-  @override
-  String toString() => 'AnalyticsException: $message';
-}
-// Continuing lib/providers/analytics_provider.dart
-
-class AnalyticsProvider with ChangeNotifier {
-  // ... (previous code remains the same)
-
-  // Enhanced medication adherence analysis
-  Map<String, dynamic> getMedicationAdherence(String petId) {
-    final analytics = _analyticsData[petId];
-    if (analytics == null) return _getEmptyMedicationAdherence();
-
-    final adherenceData = analytics['medicationAdherence'] ?? {};
-    return {
-      'overall': _calculateOverallAdherence(adherenceData),
-      'byMedication': adherenceData['byMedication'] ?? {},
-      'trends': _processMedicationTrends(adherenceData['trends'] ?? []),
-      'missedDoses': adherenceData['missedDoses'] ?? [],
-      'schedule': {
-        'morning': adherenceData['schedule']?['morning'] ?? 0,
-        'afternoon': adherenceData['schedule']?['afternoon'] ?? 0,
-        'evening': adherenceData['schedule']?['evening'] ?? 0,
-      },
-      'recommendations': _generateMedicationRecommendations(adherenceData),
-    };
-  }
-
-  Map<String, dynamic> _getEmptyMedicationAdherence() {
-    return {
-      'overall': 0.0,
-      'byMedication': {},
-      'trends': [],
-      'missedDoses': [],
-      'schedule': {
-        'morning': 0,
-        'afternoon': 0,
-        'evening': 0,
-      },
-      'recommendations': [],
-    };
-  }
-
-  double _calculateOverallAdherence(Map<String, dynamic> data) {
-    final medications = data['byMedication'] as Map<String, dynamic>? ?? {};
-    if (medications.isEmpty) return 0.0;
-
-    final total = medications.values
-        .map((v) => (v['adherence'] as num?)?.toDouble() ?? 0.0)
-        .reduce((a, b) => a + b);
-    
-    return (total / medications.length).clamp(0.0, 100.0);
-  }
-
-  List<Map<String, dynamic>> _processMedicationTrends(List<dynamic> trends) {
-    return trends.map((trend) {
-      return {
-        'date': trend['date'],
-        'adherence': (trend['adherence'] as num).toDouble().clamp(0.0, 100.0),
-        'medications': trend['medications'] ?? [],
+      final report = {
+        'summary': _generateSummary(analytics),
+        'wellnessScore': getWellnessTrends(petId),
+        'healthMetrics': getHealthMetricsAnalysis(petId),
+        'behavior': getBehaviorAnalysis(petId),
+        'recommendations': await _generateRecommendations(analytics),
+        'metadata': {
+          'generatedAt': DateTime.now().toIso8601String(),
+          'reportVersion': '2.0',
+          'confidence': analytics['metadata']?['confidence'] ?? 0.0,
+        },
       };
-    }).toList();
-  }
 
-  List<String> _generateMedicationRecommendations(Map<String, dynamic> data) {
-    final recommendations = <String>[];
-    final adherence = _calculateOverallAdherence(data);
+      // Log report generation
+      await _analytics.logEvent(
+        name: 'report_generated',
+        parameters: {
+          'pet_id': petId,
+          'report_type': 'comprehensive',
+          'confidence': report['metadata']['confidence'],
+        },
+      );
 
-    if (adherence < 80) {
-      recommendations.add('Consider setting up medication reminders');
+      return report;
+    } catch (e, stackTrace) {
+      _logger.error('Failed to generate report', e, stackTrace);
+      rethrow;
     }
-    if (data['missedDoses']?.length > 3) {
-      recommendations.add('Review medication schedule with your vet');
-    }
-    return recommendations;
-  }
-
-  // Enhanced comparative analytics
-  Map<String, dynamic> getComparativeAnalytics(String petId) {
-    final analytics = _analyticsData[petId];
-    if (analytics == null) return _getEmptyComparativeAnalytics();
-
-    return {
-      'speciesAverage': _processComparativeMetrics(
-        analytics['speciesAverage'] ?? {}
-      ),
-      'breedAverage': _processComparativeMetrics(
-        analytics['breedAverage'] ?? {}
-      ),
-      'ageGroupAverage': _processComparativeMetrics(
-        analytics['ageGroupAverage'] ?? {}
-      ),
-      'percentile': _calculatePercentiles(analytics),
-      'recommendations': _generateComparativeRecommendations(analytics),
-    };
-  }
-
-  Map<String, dynamic> _getEmptyComparativeAnalytics() {
-    return {
-      'speciesAverage': {},
-      'breedAverage': {},
-      'ageGroupAverage': {},
-      'percentile': {},
-      'recommendations': [],
-    };
-  }
-
-  Map<String, dynamic> _processComparativeMetrics(Map<String, dynamic> metrics) {
-    return {
-      'weight': metrics['weight']?.toDouble() ?? 0.0,
-      'activity': metrics['activity']?.toDouble() ?? 0.0,
-      'nutrition': metrics['nutrition']?.toDouble() ?? 0.0,
-      'wellness': metrics['wellness']?.toDouble() ?? 0.0,
-    };
-  }
-
-  Map<String, int> _calculatePercentiles(Map<String, dynamic> analytics) {
-    final percentiles = analytics['percentiles'] as Map<String, dynamic>? ?? {};
-    return percentiles.map((key, value) => 
-        MapEntry(key, (value as num).toInt().clamp(0, 100)));
-  }
-
-  // Generate comprehensive report
-  Map<String, dynamic> generateReport(String petId) {
-    final analytics = _analyticsData[petId];
-    if (analytics == null) return {};
-
-    return {
-      'summary': _generateSummary(analytics),
-      'wellnessScore': getWellnessTrends(petId),
-      'healthMetrics': getHealthMetricsAnalysis(petId),
-      'behavior': getBehaviorAnalysis(petId),
-      'careTeam': getCareTeamEffectiveness(petId),
-      'medications': getMedicationAdherence(petId),
-      'comparative': getComparativeAnalytics(petId),
-      'recommendations': _generateRecommendations(analytics),
-      'timestamp': DateTime.now().toIso8601String(),
-      'metadata': {
-        'petId': petId,
-        'reportId': 'RPT-${DateTime.now().millisecondsSinceEpoch}',
-        'version': '1.0',
-      },
-    };
   }
 
   Map<String, dynamic> _generateSummary(Map<String, dynamic> analytics) {
@@ -341,79 +435,88 @@ class AnalyticsProvider with ChangeNotifier {
     };
   }
 
-  List<String> _extractKeyFindings(Map<String, dynamic> analytics) {
-    final findings = <String>[];
-    final score = analytics['wellnessScore'] as num? ?? 0;
+  Future<List<Map<String, dynamic>>> _generateRecommendations(
+    Map<String, dynamic> analytics,
+  ) async {
+    final recommendations = <Map<String, dynamic>>[];
     
-    if (score > 80) {
-      findings.add('Excellent overall health status');
-    } else if (score < 60) {
-      findings.add('Health status needs attention');
+    // Health-based recommendations
+    if (analytics['wellnessScore'] != null) {
+      recommendations.addAll(
+        _generateHealthRecommendations(analytics['wellnessScore'] as num)
+      );
     }
 
-    // Add more specific findings based on other metrics
-    return findings;
-  }
-
-  List<Map<String, dynamic>> _extractAlerts(Map<String, dynamic> analytics) {
-    final alerts = <Map<String, dynamic>>[];
-    final healthTrends = analytics['healthTrends'] as Map<String, dynamic>? ?? {};
-
-    for (var metric in healthTrends.entries) {
-      if (_isMetricCritical(metric.value)) {
-        alerts.add({
-          'type': 'critical',
-          'metric': metric.key,
-          'value': metric.value,
-          'message': 'Critical value detected for ${metric.key}',
-        });
-      }
+    // Behavior-based recommendations
+    if (analytics['behaviorTrends'] != null) {
+      recommendations.addAll(
+        _generateBehaviorRecommendations(
+          analytics['behaviorTrends'] as Map<String, dynamic>
+        )
+      );
     }
 
-    return alerts;
-  }
-
-  bool _isMetricCritical(dynamic value) {
-    if (value is! num) return false;
-    return value < 30.0; // Example threshold
-  }
-
-  List<String> _generateRecommendations(Map<String, dynamic> analytics) {
-    final recommendations = <String>[];
-    final score = analytics['wellnessScore'] as num? ?? 0;
-
-    // Add general recommendations based on wellness score
-    if (score < 60) {
-      recommendations.add('Schedule a comprehensive health check-up');
-    }
-    if (score < 80) {
-      recommendations.add('Review current diet and exercise routine');
-    }
-
-    // Add specific recommendations based on other metrics
-    final healthTrends = analytics['healthTrends'] as Map<String, dynamic>? ?? {};
-    for (var metric in healthTrends.entries) {
-      if (_needsImprovement(metric.value)) {
-        recommendations.add('Focus on improving ${metric.key}');
-      }
+    // Store recommendations in Firestore for tracking
+    try {
+      await _firestore
+          .collection('pet_recommendations')
+          .add({
+        'timestamp': FieldValue.serverTimestamp(),
+        'recommendations': recommendations,
+        'analyticsSnapshot': analytics,
+      });
+    } catch (e, stackTrace) {
+      _logger.error('Failed to store recommendations', e, stackTrace);
     }
 
     return recommendations;
   }
 
-  bool _needsImprovement(dynamic value) {
-    if (value is! num) return false;
-    return value < 70.0; // Example threshold
+  List<Map<String, dynamic>> _generateHealthRecommendations(num wellnessScore) {
+    final recommendations = <Map<String, dynamic>>[];
+    
+    if (wellnessScore < 60) {
+      recommendations.add({
+        'type': 'urgent',
+        'category': 'health',
+        'action': 'Schedule veterinary check-up',
+        'reason': 'Low wellness score indicates potential health concerns',
+      });
+    }
+    
+    return recommendations;
   }
 
-  // Helper methods for trend analysis
-  List<Map<String, dynamic>> _extractImprovements(Map<String, dynamic> analytics) {
-    // Implementation for extracting improvements
-    return [];
+  List<Map<String, dynamic>> _generateBehaviorRecommendations(
+    Map<String, dynamic> behaviorTrends,
+  ) {
+    final recommendations = <Map<String, dynamic>>[];
+    
+    for (var trend in behaviorTrends.entries) {
+      if (trend.value['trend'] == 'strongly_declining') {
+        recommendations.add({
+          'type': 'warning',
+          'category': 'behavior',
+          'action': 'Monitor ${trend.key} behavior',
+          'reason': 'Significant decline in ${trend.key} observed',
+        });
+      }
+    }
+    
+    return recommendations;
   }
 
-  List<Map<String, dynamic>> _extractConcerns(Map<String, dynamic> analytics) {
-    // Implementation for extracting concerns
-    return [];
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
+}
+
+class AnalyticsException implements Exception {
+  final String message;
+  AnalyticsException(this.message);
+
+  @override
+  String toString() => 'AnalyticsException: $message';
 }

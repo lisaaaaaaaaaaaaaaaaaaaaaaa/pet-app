@@ -1,22 +1,19 @@
 import 'package:flutter/material.dart';
-import '../common/custom_card.dart';
-import '../common/loading_indicator.dart';
-import '../custom_button.dart';
 import '../../models/meal.dart';
-import '../../models/food_item.dart';
+import '../../models/food.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/constants.dart';
+import '../common/custom_card.dart';
 
 class AddMealDialog extends StatefulWidget {
-  final String petId;
-  final DateTime date;
-  final Meal? meal;
+  final Meal? initialMeal;
+  final List<Food> availableFoods;
+  final Function(Meal meal) onSave;
 
   const AddMealDialog({
     Key? key,
-    required this.petId,
-    required this.date,
-    this.meal,
+    this.initialMeal,
+    required this.availableFoods,
+    required this.onSave,
   }) : super(key: key);
 
   @override
@@ -25,35 +22,43 @@ class AddMealDialog extends StatefulWidget {
 
 class _AddMealDialogState extends State<AddMealDialog> {
   final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nameController;
   late TimeOfDay _selectedTime;
-  String _selectedType = 'Breakfast';
-  final _amountController = TextEditingController();
-  final _notesController = TextEditingController();
-  bool _isLoading = false;
-
-  final List<String> _mealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+  late List<Food> _selectedFoods;
+  late Map<String, double> _portions;
+  MealType _selectedType = MealType.breakfast;
 
   @override
   void initState() {
     super.initState();
-    _selectedTime = TimeOfDay.now();
-    if (widget.meal != null) {
-      _initializeWithMeal(widget.meal!);
-    }
-  }
-
-  void _initializeWithMeal(Meal meal) {
-    _selectedTime = TimeOfDay.fromDateTime(meal.time);
-    _selectedType = meal.type;
-    _amountController.text = meal.amount.toString();
-    _notesController.text = meal.notes;
+    _nameController = TextEditingController(text: widget.initialMeal?.name);
+    _selectedTime = widget.initialMeal?.time ?? TimeOfDay.now();
+    _selectedFoods = List.from(widget.initialMeal?.foods ?? []);
+    _portions = Map.from(widget.initialMeal?.portions ?? {});
+    _selectedType = widget.initialMeal?.type ?? MealType.breakfast;
   }
 
   @override
   void dispose() {
-    _amountController.dispose();
-    _notesController.dispose();
+    _nameController.dispose();
     super.dispose();
+  }
+
+  void _handleSave() {
+    if (_formKey.currentState?.validate() ?? false) {
+      final meal = Meal(
+        id: widget.initialMeal?.id ?? DateTime.now().toString(),
+        name: _nameController.text.trim(),
+        type: _selectedType,
+        time: _selectedTime,
+        foods: _selectedFoods,
+        portions: _portions,
+        dateAdded: widget.initialMeal?.dateAdded ?? DateTime.now(),
+      );
+
+      widget.onSave(meal);
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _selectTime() async {
@@ -61,140 +66,280 @@ class _AddMealDialogState extends State<AddMealDialog> {
       context: context,
       initialTime: _selectedTime,
     );
-    if (picked != null && picked != _selectedTime) {
+    if (picked != null) {
       setState(() {
         _selectedTime = picked;
       });
     }
   }
 
-  void _submitForm() {
-    if (!_formKey.currentState!.validate()) return;
+  void _addFood(Food food) {
+    setState(() {
+      if (!_selectedFoods.contains(food)) {
+        _selectedFoods.add(food);
+        _portions[food.id] = 1.0;
+      }
+    });
+  }
 
-    final meal = Meal(
-      id: widget.meal?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      petId: widget.petId,
-      type: _selectedType,
-      time: DateTime(
-        widget.date.year,
-        widget.date.month,
-        widget.date.day,
-        _selectedTime.hour,
-        _selectedTime.minute,
-      ),
-      amount: double.parse(_amountController.text),
-      unit: 'cups',
-      notes: _notesController.text,
-    );
+  void _removeFood(Food food) {
+    setState(() {
+      _selectedFoods.remove(food);
+      _portions.remove(food.id);
+    });
+  }
 
-    Navigator.pop(context, meal);
+  void _updatePortion(Food food, double portion) {
+    setState(() {
+      _portions[food.id] = portion;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: CustomCard(
+        padding: EdgeInsets.zero,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  widget.meal == null ? 'Add Meal' : 'Edit Meal',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Text(
+                    widget.initialMeal != null ? 'Edit Meal' : 'Add New Meal',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimaryColor,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _selectedType,
-                  decoration: const InputDecoration(
-                    labelText: 'Meal Type',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _mealTypes.map((type) {
-                    return DropdownMenuItem(
-                      value: type,
-                      child: Text(type),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedType = value!;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                InkWell(
-                  onTap: _selectTime,
-                  child: InputDecorator(
+                  const SizedBox(height: 24),
+
+                  // Name Field
+                  TextFormField(
+                    controller: _nameController,
                     decoration: const InputDecoration(
-                      labelText: 'Time',
-                      border: OutlineInputBorder(),
+                      labelText: 'Meal Name*',
+                      hintText: 'Enter meal name',
+                      prefixIcon: Icon(Icons.restaurant),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(_selectedTime.format(context)),
-                        const Icon(Icons.access_time),
-                      ],
+                    validator: (value) {
+                      if (value?.isEmpty ?? true) {
+                        return 'Please enter a meal name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Meal Type Selector
+                  DropdownButtonFormField<MealType>(
+                    value: _selectedType,
+                    decoration: const InputDecoration(
+                      labelText: 'Meal Type',
+                      prefixIcon: Icon(Icons.category),
+                    ),
+                    items: MealType.values.map((type) {
+                      return DropdownMenuItem(
+                        value: type,
+                        child: Text(type.toString().split('.').last),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedType = value!;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Time Picker
+                  InkWell(
+                    onTap: _selectTime,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Meal Time',
+                        prefixIcon: Icon(Icons.access_time),
+                      ),
+                      child: Text(
+                        _selectedTime.format(context),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _amountController,
-                  decoration: const InputDecoration(
-                    labelText: 'Amount (cups)',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter amount';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Please enter a valid number';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _notesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Notes (optional)',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    CustomButton(
-                      onPressed: () => Navigator.pop(context),
-                      text: 'Cancel',
-                      type: ButtonType.secondary,
+                  const SizedBox(height: 24),
+
+                  // Foods Section
+                  const Text(
+                    'Foods',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(width: 8),
-                    CustomButton(
-                      onPressed: _isLoading ? null : _submitForm,
-                      text: widget.meal == null ? 'Add' : 'Save',
-                      icon: _isLoading ? null : Icons.check,
-                      isLoading: _isLoading,
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Selected Foods List
+                  if (_selectedFoods.isNotEmpty) ...[
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _selectedFoods.length,
+                      itemBuilder: (context, index) {
+                        final food = _selectedFoods[index];
+                        return ListTile(
+                          title: Text(food.name),
+                          subtitle: Text('${food.calories} calories per serving'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 60,
+                                child: TextFormField(
+                                  initialValue: _portions[food.id].toString(),
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    suffix: Text('×'),
+                                  ),
+                                  onChanged: (value) {
+                                    _updatePortion(
+                                      food,
+                                      double.tryParse(value) ?? 1.0,
+                                    );
+                                  },
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.remove_circle_outline),
+                                color: AppTheme.errorColor,
+                                onPressed: () => _removeFood(food),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
+                    const SizedBox(height: 16),
                   ],
-                ),
-              ],
+
+                  // Add Food Button
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => _FoodSelectionDialog(
+                          availableFoods: widget.availableFoods
+                              .where((f) => !_selectedFoods.contains(f))
+                              .toList(),
+                          onFoodSelected: _addFood,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Food'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Action Buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: _selectedFoods.isEmpty ? null : _handleSave,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                        ),
+                        child: const Text('Save'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+// Food Selection Dialog
+class _FoodSelectionDialog extends StatelessWidget {
+  final List<Food> availableFoods;
+  final Function(Food) onFoodSelected;
+
+  const _FoodSelectionDialog({
+    required this.availableFoods,
+    required this.onFoodSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Select Food',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: availableFoods.length,
+                itemBuilder: (context, index) {
+                  final food = availableFoods[index];
+                  return ListTile(
+                    title: Text(food.name),
+                    subtitle: Text(
+                      '${food.calories} calories per ${food.servingSize}',
+                    ),
+                    onTap: () {
+                      onFoodSelected(food);
+                      Navigator.of(context).pop();
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum MealType {
+  breakfast,
+  lunch,
+  dinner,
+  snack,
 }

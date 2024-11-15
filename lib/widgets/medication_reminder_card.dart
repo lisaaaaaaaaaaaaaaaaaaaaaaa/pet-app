@@ -1,134 +1,248 @@
 import 'package:flutter/material.dart';
+import '../models/medication_reminder.dart';
 import '../theme/app_theme.dart';
+import '../utils/date_formatter.dart';
 import 'common/custom_card.dart';
 
 class MedicationReminderCard extends StatelessWidget {
-  final String petName;
-  final List<Medication> medications;
-  final VoidCallback? onAddMedication;
-  final Function(Medication)? onMarkComplete;
-  final Function(Medication)? onViewDetails;
-  final bool isLoading;
-  final DateTime? nextDueTime;
+  final MedicationReminder reminder;
+  final VoidCallback? onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final VoidCallback? onTake;
+  final VoidCallback? onSkip;
+  final bool showActions;
+  final bool isExpanded;
 
   const MedicationReminderCard({
     Key? key,
-    required this.petName,
-    required this.medications,
-    this.onAddMedication,
-    this.onMarkComplete,
-    this.onViewDetails,
-    this.isLoading = false,
-    this.nextDueTime,
+    required this.reminder,
+    this.onTap,
+    this.onEdit,
+    this.onDelete,
+    this.onTake,
+    this.onSkip,
+    this.showActions = true,
+    this.isExpanded = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final upcomingMeds = medications.where((med) => !med.isCompleted).toList();
-    final completedMeds = medications.where((med) => med.isCompleted).toList();
-
     return CustomCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Medication Reminders',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: AppTheme.primaryGreen,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _buildStatusIndicator(),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        reminder.medicationName,
+                        style: const TextStyle(
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimaryColor,
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _getTimeText(),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _isOverdue()
+                              ? AppTheme.errorColor
+                              : AppTheme.textSecondaryColor,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    petName,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.secondaryGreen,
-                        ),
+                ),
+                if (showActions) ...[
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: onEdit,
+                    color: AppTheme.primaryColor,
+                    iconSize: 20,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: onDelete,
+                    color: AppTheme.errorColor,
+                    iconSize: 20,
                   ),
                 ],
-              ),
-              if (onAddMedication != null)
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  color: AppTheme.primaryGreen,
-                  onPressed: isLoading ? null : onAddMedication,
-                ),
-            ],
-          ),
-          if (isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else ...[
-            if (nextDueTime != null) ...[
+              ],
+            ),
+            if (isExpanded) ...[
               const SizedBox(height: 16),
-              _buildNextDueTime(context),
-            ],
-            if (upcomingMeds.isNotEmpty) ...[
+              _buildDosageInfo(),
               const SizedBox(height: 16),
-              Text(
-                'Upcoming',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: AppTheme.secondaryGreen,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              ...upcomingMeds.map((med) => _buildMedicationItem(context, med)),
-            ],
-            if (completedMeds.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                'Completed Today',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: AppTheme.secondaryGreen,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              ...completedMeds.take(3).map((med) => _buildMedicationItem(context, med)),
+              _buildInstructions(),
+              if (reminder.status == MedicationStatus.pending)
+                _buildActionButtons(),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusIndicator() {
+    Color color;
+    IconData icon;
+
+    switch (reminder.status) {
+      case MedicationStatus.taken:
+        color = Colors.green;
+        icon = Icons.check_circle;
+        break;
+      case MedicationStatus.skipped:
+        color = Colors.orange;
+        icon = Icons.remove_circle;
+        break;
+      case MedicationStatus.missed:
+        color = AppTheme.errorColor;
+        icon = Icons.cancel;
+        break;
+      case MedicationStatus.pending:
+        color = _isOverdue() ? AppTheme.errorColor : AppTheme.primaryColor;
+        icon = Icons.medication;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        icon,
+        color: color,
+        size: 24,
+      ),
+    );
+  }
+
+  Widget _buildDosageInfo() {
+    return Row(
+      children: [
+        _buildInfoItem(
+          'Dosage',
+          '${reminder.dosage} ${reminder.unit}',
+          Icons.medical_information,
+        ),
+        const SizedBox(width: 24),
+        _buildInfoItem(
+          'Frequency',
+          reminder.frequency,
+          Icons.repeat,
+        ),
+        if (reminder.duration != null) ...[
+          const SizedBox(width: 24),
+          _buildInfoItem(
+            'Duration',
+            reminder.duration!,
+            Icons.timer_outlined,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildInfoItem(String label, String value, IconData icon) {
+    return Expanded(
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: AppTheme.textSecondaryColor,
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondaryColor,
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.textPrimaryColor,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildNextDueTime(BuildContext context) {
-    final timeUntil = nextDueTime!.difference(DateTime.now());
-    final isOverdue = timeUntil.isNegative;
-    final color = isOverdue ? AppTheme.error : AppTheme.warning;
+  Widget _buildInstructions() {
+    if (reminder.instructions == null) return const SizedBox.shrink();
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Instructions',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          reminder.instructions!,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textSecondaryColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
       child: Row(
         children: [
-          Icon(
-            isOverdue ? Icons.warning : Icons.access_time,
-            color: color,
-            size: 20,
-          ),
-          const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              isOverdue
-                  ? 'Medication overdue!'
-                  : 'Next medication due in ${_formatDuration(timeUntil)}',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w600,
-                  ),
+            child: ElevatedButton.icon(
+              onPressed: onTake,
+              icon: const Icon(Icons.check),
+              label: const Text('Take'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: onSkip,
+              icon: const Icon(Icons.close),
+              label: const Text('Skip'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.orange,
+              ),
             ),
           ),
         ],
@@ -136,125 +250,18 @@ class MedicationReminderCard extends StatelessWidget {
     );
   }
 
-  Widget _buildMedicationItem(BuildContext context, Medication medication) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: () => onViewDetails?.call(medication),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppTheme.lightBlue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _getMedicationColor(medication).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  _getMedicationIcon(medication),
-                  color: _getMedicationColor(medication),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      medication.name,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${medication.dosage} - ${medication.frequency}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.neutralGrey,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              if (!medication.isCompleted && onMarkComplete != null)
-                IconButton(
-                  icon: const Icon(Icons.check_circle_outline),
-                  color: AppTheme.success,
-                  onPressed: () => onMarkComplete?.call(medication),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Color _getMedicationColor(Medication medication) {
-    if (medication.isCompleted) return AppTheme.success;
-    if (medication.isOverdue) return AppTheme.error;
-    return AppTheme.primaryGreen;
-  }
-
-  IconData _getMedicationIcon(Medication medication) {
-    if (medication.isCompleted) return Icons.check_circle;
-    if (medication.isOverdue) return Icons.warning;
-    switch (medication.type) {
-      case MedicationType.pill:
-        return Icons.medication;
-      case MedicationType.liquid:
-        return Icons.water_drop;
-      case MedicationType.injection:
-        return Icons.vaccines;
-      case MedicationType.topical:
-        return Icons.healing;
-      default:
-        return Icons.medical_services;
+  String _getTimeText() {
+    final timeStr = DateFormatter.formatTime(reminder.scheduledTime);
+    if (reminder.status == MedicationStatus.pending) {
+      return _isOverdue()
+          ? 'Overdue - $timeStr'
+          : 'Scheduled for $timeStr';
     }
+    return timeStr;
   }
 
-  String _formatDuration(Duration duration) {
-    if (duration.inHours > 0) {
-      return '${duration.inHours}h ${duration.inMinutes.remainder(60)}m';
-    }
-    return '${duration.inMinutes}m';
+  bool _isOverdue() {
+    return reminder.status == MedicationStatus.pending &&
+        reminder.scheduledTime.isBefore(DateTime.now());
   }
-}
-
-class Medication {
-  final String id;
-  final String name;
-  final String dosage;
-  final String frequency;
-  final MedicationType type;
-  final DateTime nextDue;
-  final bool isCompleted;
-  final bool isOverdue;
-  final String? notes;
-
-  const Medication({
-    required this.id,
-    required this.name,
-    required this.dosage,
-    required this.frequency,
-    required this.type,
-    required this.nextDue,
-    this.isCompleted = false,
-    this.isOverdue = false,
-    this.notes,
-  });
-}
-
-enum MedicationType {
-  pill,
-  liquid,
-  injection,
-  topical,
-  other,
 }

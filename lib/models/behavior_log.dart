@@ -1,6 +1,5 @@
-// lib/models/behavior_log.dart
-
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BehaviorLog {
   final String id;
@@ -17,6 +16,15 @@ class BehaviorLog {
   final List<String> symptoms;
   final String? notes;
   final String? location;
+  final String? createdBy;
+  final DateTime createdAt;
+  final List<String>? attachments;
+  final Map<String, dynamic>? metadata;
+  final bool isPremium;
+  final List<String>? tags;
+  final BehaviorCategory category;
+  final Map<String, dynamic>? environmentalFactors;
+  final double? stressLevel;
 
   BehaviorLog({
     required this.id,
@@ -33,41 +41,16 @@ class BehaviorLog {
     this.symptoms = const [],
     this.notes,
     this.location,
-  });
-
-  BehaviorLog copyWith({
-    String? id,
-    String? petId,
-    String? behavior,
-    String? context,
-    DateTime? date,
-    String? trigger,
-    String? resolution,
-    List<String>? interventions,
-    bool? wasSuccessful,
-    Duration? duration,
-    BehaviorIntensity? intensity,
-    List<String>? symptoms,
-    String? notes,
-    String? location,
-  }) {
-    return BehaviorLog(
-      id: id ?? this.id,
-      petId: petId ?? this.petId,
-      behavior: behavior ?? this.behavior,
-      context: context ?? this.context,
-      date: date ?? this.date,
-      trigger: trigger ?? this.trigger,
-      resolution: resolution ?? this.resolution,
-      interventions: interventions ?? this.interventions,
-      wasSuccessful: wasSuccessful ?? this.wasSuccessful,
-      duration: duration ?? this.duration,
-      intensity: intensity ?? this.intensity,
-      symptoms: symptoms ?? this.symptoms,
-      notes: notes ?? this.notes,
-      location: location ?? this.location,
-    );
-  }
+    this.createdBy,
+    DateTime? createdAt,
+    this.attachments,
+    this.metadata,
+    this.isPremium = false,
+    this.tags,
+    this.category = BehaviorCategory.other,
+    this.environmentalFactors,
+    this.stressLevel,
+  }) : this.createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {
@@ -85,6 +68,15 @@ class BehaviorLog {
       'symptoms': symptoms,
       'notes': notes,
       'location': location,
+      'createdBy': createdBy,
+      'createdAt': createdAt.toIso8601String(),
+      'attachments': attachments,
+      'metadata': metadata,
+      'isPremium': isPremium,
+      'tags': tags,
+      'category': category.toString(),
+      'environmentalFactors': environmentalFactors,
+      'stressLevel': stressLevel,
     };
   }
 
@@ -100,7 +92,7 @@ class BehaviorLog {
       interventions: List<String>.from(json['interventions'] ?? []),
       wasSuccessful: json['wasSuccessful'] ?? false,
       duration: json['duration'] != null 
-          ? Duration(minutes: json['duration']) 
+          ? Duration(minutes: json['duration'])
           : null,
       intensity: BehaviorIntensity.values.firstWhere(
         (e) => e.toString() == json['intensity'],
@@ -109,10 +101,25 @@ class BehaviorLog {
       symptoms: List<String>.from(json['symptoms'] ?? []),
       notes: json['notes'],
       location: json['location'],
+      createdBy: json['createdBy'],
+      createdAt: json['createdAt'] != null 
+          ? DateTime.parse(json['createdAt'])
+          : null,
+      attachments: json['attachments'] != null 
+          ? List<String>.from(json['attachments'])
+          : null,
+      metadata: json['metadata'],
+      isPremium: json['isPremium'] ?? false,
+      tags: json['tags'] != null ? List<String>.from(json['tags']) : null,
+      category: BehaviorCategory.values.firstWhere(
+        (e) => e.toString() == json['category'],
+        orElse: () => BehaviorCategory.other,
+      ),
+      environmentalFactors: json['environmentalFactors'],
+      stressLevel: json['stressLevel']?.toDouble(),
     );
   }
 
-  // Helper method to get duration in readable format
   String? getFormattedDuration() {
     if (duration == null) return null;
     final hours = duration!.inHours;
@@ -123,32 +130,11 @@ class BehaviorLog {
     return '$minutes min';
   }
 
-  // Helper method to categorize behavior
-  BehaviorCategory getBehaviorCategory() {
-    final lowerBehavior = behavior.toLowerCase();
-    if (lowerBehavior.contains('anxiety') || 
-        lowerBehavior.contains('stress') ||
-        lowerBehavior.contains('fear')) {
-      return BehaviorCategory.anxiety;
-    } else if (lowerBehavior.contains('aggression') || 
-               lowerBehavior.contains('hostile')) {
-      return BehaviorCategory.aggression;
-    } else if (lowerBehavior.contains('eating') || 
-               lowerBehavior.contains('food')) {
-      return BehaviorCategory.eating;
-    } else if (lowerBehavior.contains('elimination') || 
-               lowerBehavior.contains('potty')) {
-      return BehaviorCategory.elimination;
-    }
-    return BehaviorCategory.other;
-  }
+  bool canEdit(String userId) => createdBy == userId || !isPremium;
+  bool get isRecent => date.isAfter(DateTime.now().subtract(const Duration(days: 7)));
 }
 
-enum BehaviorIntensity {
-  mild,
-  moderate,
-  severe
-}
+enum BehaviorIntensity { mild, moderate, severe }
 
 enum BehaviorCategory {
   anxiety,
@@ -162,51 +148,18 @@ enum BehaviorCategory {
   other
 }
 
-// Extension for behavior categories
 extension BehaviorCategoryExtension on BehaviorCategory {
   String get displayName {
     switch (this) {
-      case BehaviorCategory.anxiety:
-        return 'Anxiety/Stress';
-      case BehaviorCategory.aggression:
-        return 'Aggression';
-      case BehaviorCategory.eating:
-        return 'Eating/Drinking';
-      case BehaviorCategory.elimination:
-        return 'Elimination';
-      case BehaviorCategory.social:
-        return 'Social Behavior';
-      case BehaviorCategory.grooming:
-        return 'Grooming';
-      case BehaviorCategory.vocalization:
-        return 'Vocalization';
-      case BehaviorCategory.destructive:
-        return 'Destructive Behavior';
-      case BehaviorCategory.other:
-        return 'Other';
-    }
-  }
-
-  String get icon {
-    switch (this) {
-      case BehaviorCategory.anxiety:
-        return '😰';
-      case BehaviorCategory.aggression:
-        return '😠';
-      case BehaviorCategory.eating:
-        return '🍽';
-      case BehaviorCategory.elimination:
-        return '🚽';
-      case BehaviorCategory.social:
-        return '🤝';
-      case BehaviorCategory.grooming:
-        return '🛁';
-      case BehaviorCategory.vocalization:
-        return '🗣';
-      case BehaviorCategory.destructive:
-        return '💥';
-      case BehaviorCategory.other:
-        return '❓';
+      case BehaviorCategory.anxiety: return 'Anxiety/Stress';
+      case BehaviorCategory.aggression: return 'Aggression';
+      case BehaviorCategory.eating: return 'Eating/Drinking';
+      case BehaviorCategory.elimination: return 'Elimination';
+      case BehaviorCategory.social: return 'Social Behavior';
+      case BehaviorCategory.grooming: return 'Grooming';
+      case BehaviorCategory.vocalization: return 'Vocalization';
+      case BehaviorCategory.destructive: return 'Destructive Behavior';
+      case BehaviorCategory.other: return 'Other';
     }
   }
 }

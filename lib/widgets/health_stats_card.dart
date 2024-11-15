@@ -1,100 +1,191 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'common/custom_card.dart';
 
 class HealthStatsCard extends StatelessWidget {
   final String title;
   final String value;
+  final String? unit;
   final IconData icon;
-  final Color color;
+  final Color? color;
+  final String? subtitle;
   final String? trend;
-  final VoidCallback onTap;
+  final bool isPositiveTrend;
+  final VoidCallback? onTap;
+  final bool showTrend;
+  final Widget? chart;
+  final bool expanded;
 
   const HealthStatsCard({
     Key? key,
     required this.title,
     required this.value,
     required this.icon,
-    required this.color,
+    this.unit,
+    this.color,
+    this.subtitle,
     this.trend,
-    required this.onTap,
+    this.isPositiveTrend = true,
+    this.onTap,
+    this.showTrend = true,
+    this.chart,
+    this.expanded = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.neutralGrey,
-                    ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Text(
-                    value,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+    final effectiveColor = color ?? AppTheme.primaryColor;
+
+    return CustomCard(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: effectiveColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  if (trend != null) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
+                  child: Icon(
+                    icon,
+                    color: effectiveColor,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppTheme.textSecondaryColor,
+                        ),
                       ),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        trend!,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: color,
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            value,
+                            style: const TextStyle(
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimaryColor,
                             ),
+                          ),
+                          if (unit != null) ...[
+                            const SizedBox(width: 4),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                unit!,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppTheme.textSecondaryColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ),
-                  ],
-                ],
+                    ],
+                  ),
+                ),
+                if (showTrend && trend != null)
+                  _buildTrendIndicator(),
+              ],
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                subtitle!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondaryColor,
+                ),
               ),
             ],
-          ),
+            if (expanded && chart != null) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 120,
+                child: chart!,
+              ),
+            ],
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTrendIndicator() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: (isPositiveTrend ? Colors.green : Colors.red).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isPositiveTrend
+                ? Icons.trending_up_rounded
+                : Icons.trending_down_rounded,
+            size: 16,
+            color: isPositiveTrend ? Colors.green : Colors.red,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            trend!,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isPositiveTrend ? Colors.green : Colors.red,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HealthStatsGrid extends StatelessWidget {
+  final List<HealthStatsCard> stats;
+  final int crossAxisCount;
+  final double spacing;
+  final EdgeInsets padding;
+
+  const HealthStatsGrid({
+    Key? key,
+    required this.stats,
+    this.crossAxisCount = 2,
+    this.spacing = 16,
+    this.padding = const EdgeInsets.all(16),
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: GridView.count(
+        crossAxisCount: crossAxisCount,
+        mainAxisSpacing: spacing,
+        crossAxisSpacing: spacing,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        children: stats,
       ),
     );
   }

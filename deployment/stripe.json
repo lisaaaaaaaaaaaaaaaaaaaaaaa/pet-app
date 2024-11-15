@@ -1,0 +1,17 @@
+{
+  "development": {
+    "publishableKey": "YOUR_DEV_PUBLISHABLE_KEY",
+    "secretKey": "YOUR_DEV_SECRET_KEY",
+    "webhookSecret": "YOUR_DEV_WEBHOOK_SECRET"
+  },
+  "staging": {
+    "publishableKey": "YOUR_STAGING_PUBLISHABLE_KEY",
+    "secretKey": "YOUR_STAGING_SECRET_KEY",
+    "webhookSecret": "YOUR_STAGING_WEBHOOK_SECRET"
+  },
+  "production": {
+    "publishableKey": "YOUR_PROD_PUBLISHABLE_KEY",
+    "secretKey": "YOUR_PROD_SECRET_KEY",
+    "webhookSecret": "YOUR_PROD_WEBHOOK_SECRET"
+  }
+}
