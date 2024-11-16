@@ -16,6 +16,9 @@ migrate_working_dir/
 *.iws
 .idea/
 
+# VS Code related
+.vscode/
+
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
@@ -40,11 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
 # Environment files
 .env
 .env.development
 .env.production
 
 # Firebase
-.firebase/
-firebase-debug.log
+google-services.json
+GoogleService-Info.plist
