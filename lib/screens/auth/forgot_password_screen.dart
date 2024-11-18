@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
 
@@ -28,7 +28,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
+//       await FirebaseAuth.instance.sendPasswordResetEmail(
         email: _emailController.text.trim(),
       );
 
@@ -41,7 +41,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           backgroundColor: Colors.green,
         ),
       );
-    } on FirebaseAuthException catch (e) {
+//     } on FirebaseAuthException catch (e) {
       String errorMessage;
       switch (e.code) {
         case 'invalid-email':

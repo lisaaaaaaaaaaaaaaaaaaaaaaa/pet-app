@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
-import '../../providers/auth_provider.dart';
+import '../../providers/auth_state_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 
@@ -28,7 +29,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (shouldLogout ?? false) {
       setState(() => _isLoading = true);
       try {
-        await context.read<AuthProvider>().signOut();
+        await context.read<AuthStateProvider>().signOut();
         if (!mounted) return;
         Navigator.pushReplacementNamed(context, '/login');
       } catch (e) {
@@ -49,7 +50,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthProvider>().currentUser;
+    final user = context.watch<AuthStateProvider>().currentUser;
 
     return Scaffold(
       appBar: AppBar(

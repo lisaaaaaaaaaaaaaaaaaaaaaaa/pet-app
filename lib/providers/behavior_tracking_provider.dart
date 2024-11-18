@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_analytics/firebase_analytics.dart';
+// import 'package:firebase_analytics/firebase_analytics.dart';
 import '../services/pet_service.dart';
 import '../models/pet.dart';
 import '../utils/logger.dart';
@@ -9,7 +9,7 @@ import 'dart:math';
 
 class BehaviorTrackingProvider with ChangeNotifier {
   final PetService _petService;
-  final FirebaseFirestore _firestore;
+//   final FirebaseFirestore _firestore;
   final FirebaseAnalytics _analytics;
   final Logger _logger;
 
@@ -25,14 +25,14 @@ class BehaviorTrackingProvider with ChangeNotifier {
 
   BehaviorTrackingProvider({
     PetService? petService,
-    FirebaseFirestore? firestore,
+//     FirebaseFirestore? firestore,
     FirebaseAnalytics? analytics,
     Logger? logger,
     Duration? cacheExpiration,
     Duration? refreshInterval,
   }) : 
     _petService = petService ?? PetService(),
-    _firestore = firestore ?? FirebaseFirestore.instance,
+//     _firestore = firestore ?? FirebaseFirestore.instance,
     _analytics = analytics ?? FirebaseAnalytics.instance,
     _logger = logger ?? Logger(),
     _cacheExpiration = cacheExpiration ?? const Duration(hours: 1),

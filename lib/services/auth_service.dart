@@ -1,10 +1,10 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-import '../models/user_profile.dart';
 
-class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+class AuthService extends ChangeNotifier {
+//   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // Stream of auth state changes
@@ -23,6 +23,7 @@ class AuthService {
         email: email,
         password: password,
       );
+      notifyListeners();
       return credential;
     } catch (e) {
       throw _handleAuthException(e);
@@ -39,6 +40,7 @@ class AuthService {
         email: email,
         password: password,
       );
+      notifyListeners();
       return credential;
     } catch (e) {
       throw _handleAuthException(e);
@@ -51,15 +53,16 @@ class AuthService {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) throw 'Google sign in aborted';
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      return await _auth.signInWithCredential(credential);
+      final userCredential = await _auth.signInWithCredential(credential);
+      notifyListeners();
+      return userCredential;
     } catch (e) {
       throw _handleAuthException(e);
     }
@@ -80,7 +83,9 @@ class AuthService {
         accessToken: appleCredential.authorizationCode,
       );
 
-      return await _auth.signInWithCredential(oauthCredential);
+      final userCredential = await _auth.signInWithCredential(oauthCredential);
+      notifyListeners();
+      return userCredential;
     } catch (e) {
       throw _handleAuthException(e);
     }
@@ -102,6 +107,7 @@ class AuthService {
         _auth.signOut(),
         _googleSignIn.signOut(),
       ]);
+      notifyListeners();
     } catch (e) {
       throw _handleAuthException(e);
     }
@@ -115,6 +121,7 @@ class AuthService {
     try {
       await _auth.currentUser?.updateDisplayName(displayName);
       await _auth.currentUser?.updatePhotoURL(photoURL);
+      notifyListeners();
     } catch (e) {
       throw _handleAuthException(e);
     }
@@ -122,7 +129,7 @@ class AuthService {
 
   // Handle Auth Exceptions
   String _handleAuthException(dynamic e) {
-    if (e is FirebaseAuthException) {
+//     if (e is FirebaseAuthException) {
       switch (e.code) {
         case 'user-not-found':
           return 'No user found with this email.';

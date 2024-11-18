@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/validators.dart';
-import '../../utils/animations.dart';
-import '../../widgets/auth/auth_background.dart';
+import '../../utils/auth/auth_validators.dart';
+import '../../utils/auth/auth_navigation.dart';
 import '../../widgets/auth/auth_form.dart';
 import '../../widgets/common/loading_overlay.dart';
 import '../../widgets/common/custom_text_field.dart';
@@ -179,7 +178,6 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       backgroundColor: AppTheme.backgroundCream,
       body: Stack(
         children: [
-          const AuthBackground(),
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
@@ -266,7 +264,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               controller: _controllers['name']!,
               label: 'Full Name',
               icon: Icons.person_outline,
-              validator: Validators.required('Please enter your name'),
+              validator: AuthValidators.validateName,
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 16),
@@ -276,7 +274,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             label: 'Email',
             icon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
-            validator: Validators.email,
+            validator: AuthValidators.validateEmail,
             textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: 16),
@@ -285,7 +283,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             label: 'Password',
             icon: Icons.lock_outline,
             obscureText: _obscurePassword,
-            validator: Validators.password,
+            validator: AuthValidators.validatePassword,
             textInputAction: TextInputAction.done,
             suffixIcon: IconButton(
               icon: Icon(

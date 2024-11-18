@@ -1,12 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+// import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'core/base_service.dart';
 import '../models/pet.dart';
 import '../models/user_profile.dart';
 import '../utils/exceptions.dart';
 
 class DatabaseService extends BaseService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+//   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
   static final DatabaseService _instance = DatabaseService._internal();
   factory DatabaseService() => _instance;

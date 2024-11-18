@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+// import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'core/base_service.dart';
 import '../models/medical_record.dart';
 import '../models/vaccination.dart';
@@ -9,7 +9,7 @@ import '../models/allergy.dart';
 import '../utils/exceptions.dart';
 
 class MedicalRecordService extends BaseService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+//   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
   static final MedicalRecordService _instance = MedicalRecordService._internal();
   factory MedicalRecordService() => _instance;

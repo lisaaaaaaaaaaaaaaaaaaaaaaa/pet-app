@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SubscriptionManager extends ChangeNotifier {
   static const String _subscriptionKey = 'subscription_status';

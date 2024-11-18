@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import '../../providers/auth_provider.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
+import '../../providers/auth_state_provider.dart';  // Updated import
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
 
@@ -48,16 +48,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final authProvider = context.read<AuthProvider>();
-      await authProvider.registerWithEmailAndPassword(
-        _emailController.text.trim(),
-        _passwordController.text,
-        _nameController.text.trim(),
+      final authProvider = context.read<AuthStateProvider>();
+      await authProvider.signUpWithEmail(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      // Update display name after registration
+      await authProvider.updateProfile(
+        displayName: _nameController.text.trim(),
       );
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
-    } on FirebaseAuthException catch (e) {
+//     } on FirebaseAuthException catch (e) {
       String errorMessage;
       switch (e.code) {
         case 'email-already-in-use':
@@ -102,7 +106,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final authProvider = context.read<AuthProvider>();
+      final authProvider = context.read<AuthStateProvider>();
       await authProvider.signInWithGoogle();
 
       if (!mounted) return;

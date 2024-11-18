@@ -3,22 +3,16 @@ import '../../theme/app_theme.dart';
 
 class ConfirmationDialog extends StatelessWidget {
   final String title;
-  final String message;
-  final String confirmLabel;
-  final String cancelLabel;
-  final VoidCallback onConfirm;
-  final VoidCallback? onCancel;
-  final bool isDestructive;
+  final String content;  // Keep as 'content' since that's what profile_screen.dart uses
+  final String confirmText;
+  final String cancelText;
 
   const ConfirmationDialog({
     Key? key,
     required this.title,
-    required this.message,
-    this.confirmLabel = 'Confirm',
-    this.cancelLabel = 'Cancel',
-    required this.onConfirm,
-    this.onCancel,
-    this.isDestructive = false,
+    required this.content,  // Match the parameter name used in profile_screen.dart
+    required this.confirmText,
+    required this.cancelText,
   }) : super(key: key);
 
   @override
@@ -27,68 +21,41 @@ class ConfirmationDialog extends StatelessWidget {
       title: Text(
         title,
         style: const TextStyle(
-          fontSize: 18,
+          color: AppTheme.textDark,
           fontWeight: FontWeight.bold,
-          color: AppTheme.textPrimaryColor,
         ),
       ),
       content: Text(
-        message,
+        content,
         style: const TextStyle(
-          fontSize: 16,
-          color: AppTheme.textSecondaryColor,
+          color: AppTheme.textDark,
         ),
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
       ),
       actions: [
         TextButton(
-          onPressed: () {
-            if (onCancel != null) {
-              onCancel!();
-            }
-            Navigator.of(context).pop();
-          },
+          onPressed: () => Navigator.of(context).pop(false),
           child: Text(
-            cancelLabel,
+            cancelText,
             style: const TextStyle(
               color: AppTheme.textSecondaryColor,
             ),
           ),
         ),
         ElevatedButton(
-          onPressed: () {
-            onConfirm();
-            Navigator.of(context).pop();
-          },
+          onPressed: () => Navigator.of(context).pop(true),
           style: ElevatedButton.styleFrom(
-            backgroundColor: isDestructive ? AppTheme.errorColor : AppTheme.primaryColor,
+            backgroundColor: Colors.red,
             foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
-          child: Text(confirmLabel),
+          child: Text(confirmText),
         ),
       ],
     );
-  }
-
-  static Future<bool> show({
-    required BuildContext context,
-    required String title,
-    required String message,
-    String confirmLabel = 'Confirm',
-    String cancelLabel = 'Cancel',
-    bool isDestructive = false,
-  }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => ConfirmationDialog(
-        title: title,
-        message: message,
-        confirmLabel: confirmLabel,
-        cancelLabel: cancelLabel,
-        isDestructive: isDestructive,
-        onConfirm: () => Navigator.of(context).pop(true),
-        onCancel: () => Navigator.of(context).pop(false),
-      ),
-    );
-    return result ?? false;
   }
 }

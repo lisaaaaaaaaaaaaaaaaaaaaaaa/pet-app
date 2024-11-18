@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../screens/payment_screen.dart';
 import '../screens/home_screen.dart';
-import '../screens/profile_screen.dart';
-import '../screens/auth_screen.dart';
+import '../screens/auth/profile_screen.dart';
+import '../screens/auth/auth_screen.dart';
 // Import other screens as needed
 
 class AppRouter {

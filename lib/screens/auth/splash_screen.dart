@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences.dart';
-import '../../providers/auth_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../providers/auth_state_provider.dart';  // Updated import
 import '../../theme/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -54,9 +54,8 @@ class _SplashScreenState extends State<SplashScreen>
       final isFirstTime = prefs.getBool('first_time') ?? true;
 
       // Initialize auth provider
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.initialize();
-
+      final authProvider = Provider.of<AuthStateProvider>(context, listen: false);  // Updated provider type
+      
       // Wait for animations
       await Future.delayed(const Duration(seconds: 2));
 

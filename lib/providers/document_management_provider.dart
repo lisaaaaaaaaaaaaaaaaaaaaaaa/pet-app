@@ -1,15 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:firebase_analytics/firebase_analytics.dart';
+// import 'package:firebase_storage/firebase_storage.dart';
+// import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:path/path.dart' as path;
 import '../utils/logger.dart';
 import 'dart:io';
 import 'dart:async';
 
 class DocumentManagementProvider with ChangeNotifier {
-  final FirebaseFirestore _firestore;
-  final FirebaseStorage _storage;
+//   final FirebaseFirestore _firestore;
+//   final FirebaseStorage _storage;
   final FirebaseAnalytics _analytics;
   final Logger _logger;
 
@@ -21,13 +21,13 @@ class DocumentManagementProvider with ChangeNotifier {
   final Duration _cacheExpiration = const Duration(hours: 1);
 
   DocumentManagementProvider({
-    FirebaseFirestore? firestore,
-    FirebaseStorage? storage,
+//     FirebaseFirestore? firestore,
+//     FirebaseStorage? storage,
     FirebaseAnalytics? analytics,
     Logger? logger,
   }) : 
-    _firestore = firestore ?? FirebaseFirestore.instance,
-    _storage = storage ?? FirebaseStorage.instance,
+//     _firestore = firestore ?? FirebaseFirestore.instance,
+//     _storage = storage ?? FirebaseStorage.instance,
     _analytics = analytics ?? FirebaseAnalytics.instance,
     _logger = logger ?? Logger() {
     _initializeListeners();
