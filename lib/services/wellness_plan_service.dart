@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'core/base_service.dart';
 import '../models/wellness_plan.dart';
 import '../models/wellness_task.dart';
@@ -8,7 +8,7 @@ import '../models/wellness_recommendation.dart';
 import '../utils/exceptions.dart';
 
 class WellnessPlanService extends BaseService {
-//   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
   static final WellnessPlanService _instance = WellnessPlanService._internal();
   factory WellnessPlanService() => _instance;
@@ -275,19 +275,9 @@ class WellnessPlanService extends BaseService {
         final existingTask = existingTasks.docs
             .firstWhere((doc) => doc.id == task.id, orElse: () => null as DocumentSnapshot<Object?>);
 
-        if (existingTask == null) {
-          // New task
-          batch.set(taskRef, {
-            ...task.toJson(),
-            'completed': false,
-            'skipped': false,
-            'dueDate': _calculateNextDueDate(task),
-          });
-        } else {
-          // Update existing task
-          batch.update(taskRef, task.toJson());
-        }
-      }
+        // Update existing task
+        batch.update(taskRef, task.toJson());
+            }
 
       await batch.commit();
     } catch (e) {

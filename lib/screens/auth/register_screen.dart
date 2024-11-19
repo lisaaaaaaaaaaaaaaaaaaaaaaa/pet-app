@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
-// import 'package:firebase_auth/firebase_auth.dart';
-import '../../providers/auth_state_provider.dart';  // Updated import
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
 
@@ -48,20 +48,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final authProvider = context.read<AuthStateProvider>();
-      await authProvider.signUpWithEmail(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-
-      // Update display name after registration
-      await authProvider.updateProfile(
-        displayName: _nameController.text.trim(),
+      final authProvider = context.read<AuthProvider>();
+      await authProvider.registerWithEmailAndPassword(
+        _emailController.text.trim(),
+        _passwordController.text,
+        _nameController.text.trim(),
       );
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
-//     } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException catch (e) {
       String errorMessage;
       switch (e.code) {
         case 'email-already-in-use':
@@ -106,7 +102,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final authProvider = context.read<AuthStateProvider>();
+      final authProvider = context.read<AuthProvider>();
       await authProvider.signInWithGoogle();
 
       if (!mounted) return;
@@ -156,7 +152,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _buildHeader() {
     return Column(
       children: [
-        Icon(
+        const Icon(
           Icons.pets,
           size: 80,
           color: AppTheme.primaryGreen,
@@ -308,7 +304,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               children: [
                 TextSpan(
                   text: 'Terms of Service',
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppTheme.primaryGreen,
                     fontWeight: FontWeight.bold,
                   ),
@@ -320,7 +316,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const TextSpan(text: ' and '),
                 TextSpan(
                   text: 'Privacy Policy',
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppTheme.primaryGreen,
                     fontWeight: FontWeight.bold,
                   ),
@@ -415,7 +411,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           onPressed: _isLoading
               ? null
               : () => Navigator.pushReplacementNamed(context, '/login'),
-          child: Text(
+          child: const Text(
             'Sign In',
             style: TextStyle(
               color: AppTheme.primaryGreen,

@@ -61,7 +61,7 @@ class Reminder {
     this.requiresVerification = false,
     this.linkedEntityId,
     this.linkedEntityType,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

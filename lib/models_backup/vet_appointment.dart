@@ -1,6 +1,5 @@
 // lib/models/vet_appointment.dart
 
-import 'package:flutter/foundation.dart';
 
 class VetAppointment {
   final String id;

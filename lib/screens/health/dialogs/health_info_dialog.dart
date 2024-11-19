@@ -48,7 +48,7 @@ class HealthInfoDialog extends StatelessWidget {
             color: AppTheme.primaryGreen.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
+          child: const Icon(
             Icons.info_outline,
             color: AppTheme.primaryGreen,
             size: 24,
@@ -69,10 +69,10 @@ class HealthInfoDialog extends StatelessWidget {
   }
 
   Widget _buildContent() {
-    return Column(
+    return const Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
+      children: [
         _MetricInfo(
           title: 'Overall Health',
           description: 'A comprehensive score based on various health indicators including activity, medication adherence, and reported symptoms.',
@@ -119,7 +119,7 @@ class HealthInfoDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          child: Text(
+          child: const Text(
             'Got it',
             style: TextStyle(
               color: AppTheme.primaryGreen,

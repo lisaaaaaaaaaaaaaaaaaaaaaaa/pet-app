@@ -1,6 +1,5 @@
 // lib/models/medication.dart
 
-import 'package:flutter/foundation.dart';
 
 class Medication {
   final String id;

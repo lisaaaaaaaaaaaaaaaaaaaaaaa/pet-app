@@ -55,8 +55,8 @@ class User {
     this.status = UserStatus.active,
     this.security,
     this.communication,
-  }) : this.lastLogin = lastLogin ?? DateTime.now(),
-       this.createdAt = createdAt ?? DateTime.now();
+  }) : lastLogin = lastLogin ?? DateTime.now(),
+       createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

@@ -1,6 +1,5 @@
 // lib/models/pet.dart
 
-import 'package:flutter/foundation.dart';
 
 class Pet {
   // Basic Information

@@ -1,6 +1,5 @@
 // lib/models/health_metric.dart
 
-import 'package:flutter/foundation.dart';
 
 class HealthMetric {
   final String id;

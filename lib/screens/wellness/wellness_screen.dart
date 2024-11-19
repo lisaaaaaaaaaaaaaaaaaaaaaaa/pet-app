@@ -12,12 +12,14 @@ import '../../providers/pet_provider.dart';
 class WellnessScreen extends StatelessWidget {
   static const routeName = '/wellness';
 
+  const WellnessScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     final pet = Provider.of<PetProvider>(context).selectedPet;
     
     if (pet == null) {
-      return Scaffold(
+      return const Scaffold(
         body: Center(
           child: Text('Please select a pet first'),
         ),
@@ -30,7 +32,7 @@ class WellnessScreen extends StatelessWidget {
         elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -38,12 +40,12 @@ class WellnessScreen extends StatelessWidget {
               'Wellness Dashboard',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             _buildWellnessSummary(context, pet),
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
             GridView.count(
               shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
+              physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: 2,
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
@@ -110,8 +112,8 @@ class WellnessScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showAddWellnessRecord(context),
-        child: Icon(Icons.add),
         tooltip: 'Add Wellness Record',
+        child: Icon(Icons.add),
       ),
     );
   }
@@ -120,7 +122,7 @@ class WellnessScreen extends StatelessWidget {
     return Card(
       elevation: 2,
       child: Padding(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -128,7 +130,7 @@ class WellnessScreen extends StatelessWidget {
               'Recent Updates',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             _buildSummaryItem(
               context,
               'Last Vet Visit',
@@ -160,11 +162,11 @@ class WellnessScreen extends StatelessWidget {
     IconData icon,
   ) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
         children: [
           Icon(icon, size: 20, color: Theme.of(context).primaryColor),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,7 +180,7 @@ class WellnessScreen extends StatelessWidget {
                 ),
                 Text(
                   value,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
@@ -196,7 +198,7 @@ class WellnessScreen extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       builder: (context) => Padding(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -204,26 +206,26 @@ class WellnessScreen extends StatelessWidget {
               'Add Wellness Record',
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             ListTile(
-              leading: Icon(Icons.favorite),
-              title: Text('Add Health Record'),
+              leading: const Icon(Icons.favorite),
+              title: const Text('Add Health Record'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.pushNamed(context, HealthTrackingScreen.routeName);
               },
             ),
             ListTile(
-              leading: Icon(Icons.medical_services),
-              title: Text('Add Medication'),
+              leading: const Icon(Icons.medical_services),
+              title: const Text('Add Medication'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.pushNamed(context, MedicationScreen.routeName);
               },
             ),
             ListTile(
-              leading: Icon(Icons.monitor_weight),
-              title: Text('Add Weight Record'),
+              leading: const Icon(Icons.monitor_weight),
+              title: const Text('Add Weight Record'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.pushNamed(context, WeightTrackingScreen.routeName);

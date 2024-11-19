@@ -22,7 +22,7 @@ class WellnessCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: color.withOpacity(0.2),
             borderRadius: BorderRadius.circular(8),
@@ -35,7 +35,7 @@ class WellnessCard extends StatelessWidget {
                 size: 40,
                 color: color.withOpacity(0.8),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               Text(
                 title,
                 textAlign: TextAlign.center,

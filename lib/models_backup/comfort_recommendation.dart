@@ -1,6 +1,5 @@
 // lib/models/comfort_recommendation.dart
 
-import 'package:flutter/foundation.dart';
 
 class ComfortRecommendation {
   final String id;

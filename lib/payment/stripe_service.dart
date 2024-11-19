@@ -45,7 +45,7 @@ class StripeService {
         paymentIntentClientSecret,
         PaymentMethodParams.card(
           paymentMethodData: PaymentMethodData(
-            billingDetails: billingDetails ?? BillingDetails(),
+            billingDetails: billingDetails ?? const BillingDetails(),
           ),
         ),
       );
@@ -137,7 +137,7 @@ class StripeService {
           blurRadius: 4,
         ),
       ),
-      primaryButton: PaymentSheetPrimaryButtonAppearance(
+      primaryButton: const PaymentSheetPrimaryButtonAppearance(
         colors: PaymentSheetPrimaryButtonTheme(
           light: PaymentSheetPrimaryButtonThemeColors(
             background: Colors.blue,
@@ -167,7 +167,7 @@ class StripeService {
         onCardChanged: (card) {},
       );
       
-      await cardField.onCardChanged(CardFieldInputDetails(
+      cardField.onCardChanged(CardFieldInputDetails(
         complete: true,
         number: number,
         expiryMonth: expMonth,

@@ -96,8 +96,8 @@ class _MedicalRecordDetailScreenState extends State<MedicalRecordDetailScreen> {
             ),
             const PopupMenuItem(
               value: 'delete',
-              child: Text('Delete Record'),
               textStyle: TextStyle(color: Colors.red),
+              child: Text('Delete Record'),
             ),
           ],
         ),

@@ -1,58 +1,50 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences/shared_preferences.dart';  // Fixed import
+import '../models/subscription.dart';
+import 'dart:convert';
 
 class SubscriptionManager extends ChangeNotifier {
-  static const String _subscriptionKey = 'subscription_status';
-  static const String _subscriptionIdKey = 'subscription_id';
-  static const String _expiryDateKey = 'subscription_expiry';
-
-  bool _isSubscribed = false;
-  String? _subscriptionId;
+  static const String _storageKey = 'subscription_data';
+  Subscription? _currentSubscription;
   DateTime? _expiryDate;
+  final SharedPreferences _prefs;
 
-  bool get isSubscribed => _isSubscribed;
-  String? get subscriptionId => _subscriptionId;
-  DateTime? get expiryDate => _expiryDate;
-
-  Future<void> initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    _isSubscribed = prefs.getBool(_subscriptionKey) ?? false;
-    _subscriptionId = prefs.getString(_subscriptionIdKey);
-    final expiryMillis = prefs.getInt(_expiryDateKey);
-    _expiryDate = expiryMillis != null 
-        ? DateTime.fromMillisecondsSinceEpoch(expiryMillis)
-        : null;
-    notifyListeners();
+  SubscriptionManager(this._prefs) {
+    _loadSubscription();
   }
 
-  Future<void> activateSubscription(String subscriptionId) async {
-    final prefs = await SharedPreferences.getInstance();
-    _isSubscribed = true;
-    _subscriptionId = subscriptionId;
-    _expiryDate = DateTime.now().add(const Duration(days: 30));
+  Subscription? get currentSubscription => _currentSubscription;
+  DateTime? get expiryDate => _expiryDate;
+  bool get isActive => _currentSubscription != null && 
+    _expiryDate != null && 
+    _expiryDate!.isAfter(DateTime.now());
+
+  void _loadSubscription() {
+    final String? savedData = _prefs.getString(_storageKey);
+    if (savedData != null) {
+      final Map<String, dynamic> data = json.decode(savedData);
+      _currentSubscription = Subscription.fromJson(data['subscription']);
+      _expiryDate = DateTime.parse(data['expiry_date']);
+      notifyListeners();
+    }
+  }
+
+  Future<void> activateSubscription(Subscription subscription) async {
+    _currentSubscription = subscription;
+    _expiryDate = DateTime.now().add(subscription.duration);
     
-    await prefs.setBool(_subscriptionKey, true);
-    await prefs.setString(_subscriptionIdKey, subscriptionId);
-    await prefs.setInt(_expiryDateKey, _expiryDate!.millisecondsSinceEpoch);
+    await _prefs.setString(_storageKey, json.encode({
+      'subscription': subscription.toJson(),
+      'expiry_date': _expiryDate!.toIso8601String(),
+    }));
     
     notifyListeners();
   }
 
   Future<void> cancelSubscription() async {
-    final prefs = await SharedPreferences.getInstance();
-    _isSubscribed = false;
-    _subscriptionId = null;
+    _currentSubscription = null;
     _expiryDate = null;
-    
-    await prefs.setBool(_subscriptionKey, false);
-    await prefs.remove(_subscriptionIdKey);
-    await prefs.remove(_expiryDateKey);
-    
+    await _prefs.remove(_storageKey);
     notifyListeners();
-  }
-
-  bool get isExpired {
-    if (_expiryDate == null) return true;
-    return DateTime.now().isAfter(_expiryDate!);
   }
 }

@@ -188,8 +188,7 @@ class ServerErrorDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return ErrorDialog(
       title: 'Server Error',
-      message: 'Something went wrong on our end. Please try again later.' +
-          (errorCode != null ? '\nError Code: $errorCode' : ''),
+      message: 'Something went wrong on our end. Please try again later.${errorCode != null ? '\nError Code: $errorCode' : ''}',
       primaryButtonText: 'Retry',
       secondaryButtonText: 'Cancel',
       onPrimaryButtonPressed: onRetry,

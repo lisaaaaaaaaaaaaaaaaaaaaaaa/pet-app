@@ -76,7 +76,7 @@ class _MedicationFormDialogState extends State<MedicationFormDialog> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(primary: AppTheme.primaryGreen),
+            colorScheme: const ColorScheme.light(primary: AppTheme.primaryGreen),
           ),
           child: child!,
         );
@@ -90,7 +90,7 @@ class _MedicationFormDialogState extends State<MedicationFormDialog> {
         builder: (context, child) {
           return Theme(
             data: Theme.of(context).copyWith(
-              colorScheme: ColorScheme.light(primary: AppTheme.primaryGreen),
+              colorScheme: const ColorScheme.light(primary: AppTheme.primaryGreen),
             ),
             child: child!,
           );
@@ -202,7 +202,7 @@ class _MedicationFormDialogState extends State<MedicationFormDialog> {
             color: AppTheme.primaryGreen.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
+          child: const Icon(
             Icons.medication_outlined,
             color: AppTheme.primaryGreen,
           ),

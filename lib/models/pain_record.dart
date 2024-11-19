@@ -55,7 +55,7 @@ class PainRecord {
     this.treatmentResponse,
     this.painType = PainType.acute,
     this.mobilityImpact,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

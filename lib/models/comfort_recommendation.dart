@@ -46,7 +46,7 @@ class ComfortRecommendation {
     this.relatedRecommendations,
     this.successRate,
     this.implementationCount = 0,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

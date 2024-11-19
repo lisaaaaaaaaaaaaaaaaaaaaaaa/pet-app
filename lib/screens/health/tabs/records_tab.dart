@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/medical_record.dart';
 import '../../../providers/medical_record_provider.dart';
-import '../../../theme/app_theme.dart';
 import '../../../utils/date_formatter.dart';
 import '../../../widgets/common/empty_state.dart';
 import '../../../widgets/common/error_state.dart';

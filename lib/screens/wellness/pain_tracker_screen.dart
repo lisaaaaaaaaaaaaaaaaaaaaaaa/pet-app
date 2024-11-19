@@ -255,9 +255,9 @@ class _PainTrackerScreenState extends State<PainTrackerScreen> {
             }),
           ),
           const SizedBox(height: 8),
-          Row(
+          const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+            children: [
               Text('Mild'),
               Text('Moderate'),
               Text('Severe'),

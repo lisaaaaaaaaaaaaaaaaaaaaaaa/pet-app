@@ -33,7 +33,7 @@ class _AddMedicalRecordScreenState extends State<AddMedicalRecordScreen> {
   
   DateTime _date = DateTime.now();
   DateTime? _followUpDate;
-  List<PlatformFile> _attachments = [];
+  final List<PlatformFile> _attachments = [];
   bool _isLoading = false;
   bool _requiresFollowUp = false;
   bool _hasUnsavedChanges = false;

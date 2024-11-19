@@ -227,8 +227,8 @@ class _PetListScreenState extends State<PetListScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _navigateToAddPet,
         backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add),
         tooltip: 'Add new pet',
+        child: const Icon(Icons.add),
       ),
     );
   }

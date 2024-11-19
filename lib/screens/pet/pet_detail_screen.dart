@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/pet_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../../models/pet.dart';
-import '../../theme/app_theme.dart';
 import '../../widgets/common/loading_overlay.dart';
 import '../../widgets/common/error_view.dart';
 import '../../widgets/common/confirmation_dialog.dart';

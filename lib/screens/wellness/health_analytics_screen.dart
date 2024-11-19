@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
 import '../../providers/pet_provider.dart';
 import '../../models/health_record.dart';
-import '../../theme/app_theme.dart';
 
 class HealthAnalyticsScreen extends StatefulWidget {
   const HealthAnalyticsScreen({Key? key}) : super(key: key);

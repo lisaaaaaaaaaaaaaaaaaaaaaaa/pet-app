@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../providers/auth_state_provider.dart';  // Updated import
+import 'package:shared_preferences.dart';
+import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -54,8 +54,9 @@ class _SplashScreenState extends State<SplashScreen>
       final isFirstTime = prefs.getBool('first_time') ?? true;
 
       // Initialize auth provider
-      final authProvider = Provider.of<AuthStateProvider>(context, listen: false);  // Updated provider type
-      
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.initialize();
+
       // Wait for animations
       await Future.delayed(const Duration(seconds: 2));
 
@@ -141,7 +142,7 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                             ],
                           ),
-                          child: Icon(
+                          child: const Icon(
                             Icons.pets,
                             size: 64,
                             color: AppTheme.primaryGreen,
@@ -166,7 +167,7 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                         const SizedBox(height: 48),
                         // Loading indicator
-                        SizedBox(
+                        const SizedBox(
                           width: 24,
                           height: 24,
                           child: CircularProgressIndicator(

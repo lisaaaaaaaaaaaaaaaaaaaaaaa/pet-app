@@ -244,7 +244,7 @@ class _AppointmentBookingScreenState extends State<AppointmentBookingScreen> {
 
       if (firstErrorField != null) {
         Scrollable.ensureVisible(
-          firstErrorField!.context!,
+          firstErrorField!.context,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );

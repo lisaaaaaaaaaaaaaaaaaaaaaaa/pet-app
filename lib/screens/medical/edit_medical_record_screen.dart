@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../providers/pet_provider.dart';
 import '../../models/medical_record.dart';
-import '../../theme/app_theme.dart';
 
 class EditMedicalRecordScreen extends StatefulWidget {
   final MedicalRecord record;

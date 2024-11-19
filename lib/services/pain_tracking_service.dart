@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'core/base_service.dart';
 import '../models/pain_record.dart';
 import '../models/pain_location.dart';
@@ -7,7 +7,7 @@ import '../models/pain_intensity.dart';
 import '../utils/exceptions.dart';
 
 class PainTrackingService extends BaseService {
-//   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
   static final PainTrackingService _instance = PainTrackingService._internal();
   factory PainTrackingService() => _instance;

@@ -1,31 +1,35 @@
-name: pet_app
-description: A new Flutter project.
+name: golden_years
+description: A pet healthcare management app.
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.1.0 <4.0.0'
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.2
-  firebase_core: ^2.24.2
-  firebase_storage: ^11.6.10
-  google_sign_in: ^6.1.5
+  firebase_core: ^2.24.0
+  firebase_auth: ^4.15.0
+  cloud_firestore: ^4.13.3
+  firebase_storage: ^11.5.3
   provider: ^6.0.5
+  shared_preferences: ^2.2.0
+  google_sign_in: ^6.1.5
+  sign_in_with_apple: ^5.0.0
+  flutter_stripe: ^9.6.0
+  http: ^1.1.0
+  intl: ^0.18.0
   image_picker: ^1.0.4
-  path_provider: ^2.1.1
-  shared_preferences: ^2.2.1
-  intl: ^0.18.1
-  cached_network_image: ^3.3.1
-  url_launcher: ^6.1.14
-  flutter_local_notifications: ^16.1.0
-  sqflite: ^2.3.0
-  # Payment related
-  flutter_stripe: ^10.0.0
-  stripe_platform_interface: ^10.0.0
-  # Firebase services
-  firebase_auth: ^4.15.3
-  cloud_functions: ^4.5.8
+  cached_network_image: ^3.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

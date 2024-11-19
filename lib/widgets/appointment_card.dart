@@ -76,7 +76,7 @@ class AppointmentCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             _buildAppointmentInfo(),
-            if (isExpanded && appointment.notes != null) ...[
+            if (isExpanded) ...[
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 16),
@@ -209,7 +209,7 @@ class AppointmentCard extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          appointment.notes!,
+          appointment.notes,
           style: const TextStyle(
             fontSize: 14,
             color: AppTheme.textSecondaryColor,

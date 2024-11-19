@@ -1,18 +1,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../utils/logger.dart';
 import 'dart:async';
 
 class ReminderProvider with ChangeNotifier {
-//   final FirebaseFirestore _firestore;
+  final FirebaseFirestore _firestore;
   final FirebaseAnalytics _analytics;
   final FlutterLocalNotificationsPlugin _notifications;
   final Logger _logger;
 
-  Map<String, List<PetReminder>> _reminders = {};
-  Map<String, DateTime> _lastUpdated = {};
+  final Map<String, List<PetReminder>> _reminders = {};
+  final Map<String, DateTime> _lastUpdated = {};
   bool _isLoading = false;
   String? _error;
   Timer? _refreshTimer;
@@ -21,12 +21,12 @@ class ReminderProvider with ChangeNotifier {
   final Duration _checkInterval = const Duration(minutes: 1);
 
   ReminderProvider({
-//     FirebaseFirestore? firestore,
+    FirebaseFirestore? firestore,
     FirebaseAnalytics? analytics,
     FlutterLocalNotificationsPlugin? notifications,
     Logger? logger,
   }) : 
-//     _firestore = firestore ?? FirebaseFirestore.instance,
+    _firestore = firestore ?? FirebaseFirestore.instance,
     _analytics = analytics ?? FirebaseAnalytics.instance,
     _notifications = notifications ?? FlutterLocalNotificationsPlugin(),
     _logger = logger ?? Logger() {
@@ -427,7 +427,7 @@ class ReminderProvider with ChangeNotifier {
         (r) => r.id == reminderId,
         orElse: () => null as PetReminder,
       );
-      if (reminder != null) return reminder;
+      return reminder;
     }
     return null;
   }

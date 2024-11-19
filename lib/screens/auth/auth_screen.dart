@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/auth/auth_validators.dart';
-import '../../utils/auth/auth_navigation.dart';
+import '../../utils/validators.dart';
+import '../../utils/animations.dart';
+import '../../widgets/auth/auth_background.dart';
 import '../../widgets/auth/auth_form.dart';
 import '../../widgets/common/loading_overlay.dart';
 import '../../widgets/common/custom_text_field.dart';
@@ -178,6 +179,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       backgroundColor: AppTheme.backgroundCream,
       body: Stack(
         children: [
+          const AuthBackground(),
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
@@ -224,7 +226,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   Widget _buildHeader() {
     return Column(
       children: [
-        Hero(
+        const Hero(
           tag: 'auth_icon',
           child: Icon(
             Icons.pets,
@@ -244,7 +246,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         const SizedBox(height: 8),
         Text(
           _isLogin ? 'Sign in to continue' : 'Sign up to get started',
-          style: TextStyle(
+          style: const TextStyle(
             color: AppTheme.secondaryGreen,
             fontSize: 16,
           ),
@@ -264,7 +266,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               controller: _controllers['name']!,
               label: 'Full Name',
               icon: Icons.person_outline,
-              validator: AuthValidators.validateName,
+              validator: Validators.required('Please enter your name'),
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 16),
@@ -274,7 +276,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             label: 'Email',
             icon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
-            validator: AuthValidators.validateEmail,
+            validator: Validators.email,
             textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: 16),
@@ -283,7 +285,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             label: 'Password',
             icon: Icons.lock_outline,
             obscureText: _obscurePassword,
-            validator: AuthValidators.validatePassword,
+            validator: Validators.password,
             textInputAction: TextInputAction.done,
             suffixIcon: IconButton(
               icon: Icon(
@@ -324,7 +326,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       onPressed: _isLoading ? null : _toggleAuthMode,
       child: Text(
         _isLogin ? 'Don\'t have an account? Sign Up' : 'Already have an account? Sign In',
-        style: TextStyle(color: AppTheme.primaryGreen),
+        style: const TextStyle(color: AppTheme.primaryGreen),
       ),
     );
   }
@@ -332,7 +334,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   Widget _buildForgotPassword() {
     return TextButton(
       onPressed: _isLoading ? null : () => Navigator.pushNamed(context, '/forgot-password'),
-      child: Text(
+      child: const Text(
         'Forgot Password?',
         style: TextStyle(color: AppTheme.primaryGreen),
       ),

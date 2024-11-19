@@ -1,94 +1,71 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_state_provider.dart';  // Updated import
 import '../providers/pet_provider.dart';
-import '../models/pet.dart'; 
-import '../theme/app_theme.dart';
-import '../widgets/pet_profile_card.dart';
-import '../widgets/stats_grid.dart';
+import '../services/auth_provider.dart';
+import '../services/subscription_manager.dart';
+import '../widgets/pet_summary_card.dart';
+import '../constants/subscription_plans.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  List<StatItem> _buildStatsForPet(Pet pet) {
-    return [
-      StatItem(
-        label: 'Weight',
-        value: '${pet.weight} kg',
-        icon: Icons.monitor_weight_outlined,
-        color: AppTheme.primaryGreen,
-      ),
-      StatItem(
-        label: 'Age',
-        value: '${pet.age} yrs',
-        icon: Icons.cake_outlined,
-        color: AppTheme.secondaryGreen,
-      ),
-      StatItem(
-        label: 'Medications',
-        value: '${pet.medications?.length ?? 0}',
-        icon: Icons.medication_outlined,
-        color: Colors.orange,
-      ),
-      StatItem(
-        label: 'Appointments',
-        value: '${pet.appointments?.length ?? 0}',
-        icon: Icons.calendar_today_outlined,
-        color: Colors.blue,
-      ),
-    ];
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final petProvider = Provider.of<PetProvider>(context);
+    final authProvider = Provider.of<AuthProvider>(context);
+    final subscriptionManager = Provider.of<SubscriptionManager>(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home'),
+        title: const Text('Golden Years'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () => Navigator.pushNamed(context, '/profile'),
+          ),
+        ],
       ),
-      body: Consumer<PetProvider>(
-        builder: (context, petProvider, child) {
-          final pet = petProvider.selectedPet;
-          
-          if (pet == null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('No pet selected. Add a pet to get started!'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pushNamed(context, '/add-pet'),
-                    child: const Text('Add Pet'),
+      body: Column(
+        children: [
+          if (subscriptionManager.currentSubscription == null)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pushNamed(
+                    context,
+                    '/payment',
+                    arguments: {
+                      'subscription': SubscriptionPlans.premium,
+                    },
+                  );
+                },
+                child: const Text('Upgrade to Premium - \$10/month'),
+              ),
+            ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: petProvider.pets.length,
+              itemBuilder: (context, index) {
+                final pet = petProvider.pets[index];
+                return PetSummaryCard(
+                  pet: pet,
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    '/pet-detail',
+                    arguments: pet,
                   ),
-                ],
-              ),
-            );
-          }
-
-          return ListView(
-            padding: const EdgeInsets.all(16.0),
-            children: [
-              PetProfileCard(
-                pet: pet,
-                onEdit: () => Navigator.pushNamed(context, '/edit-pet'),
-                onViewMedical: () => Navigator.pushNamed(context, '/medical-records'),
-                onViewAppointments: () => Navigator.pushNamed(context, '/appointments'),
-                onViewVaccinations: () => Navigator.pushNamed(context, '/vaccinations'),
-              ),
-              const SizedBox(height: 16.0),
-              StatsGrid(
-                items: _buildStatsForPet(pet),
-                crossAxisCount: 2,
-                spacing: 16,
-              ),
-            ],
-          );
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Add new pet functionality
         },
+        child: const Icon(Icons.add),
       ),
     );
   }

@@ -1,5 +1,5 @@
 import 'dart:io';
-// import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as path;
@@ -8,9 +8,9 @@ import 'core/base_service.dart';
 import '../utils/exceptions.dart';
 
 class ImageService extends BaseService {
-//   final FirebaseStorage _storage = FirebaseStorage.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
-  final _uuid = Uuid();
+  final _uuid = const Uuid();
   
   static final ImageService _instance = ImageService._internal();
   factory ImageService() => _instance;

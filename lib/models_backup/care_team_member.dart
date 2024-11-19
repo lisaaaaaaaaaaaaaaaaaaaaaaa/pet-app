@@ -1,6 +1,5 @@
 // lib/models/care_team_member.dart
 
-import 'package:flutter/foundation.dart';
 
 class CareTeamMember {
   final String id;

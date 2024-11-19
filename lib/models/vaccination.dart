@@ -57,7 +57,7 @@ class Vaccination {
     this.administrationDetails,
     this.compliance,
     this.contraindications,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

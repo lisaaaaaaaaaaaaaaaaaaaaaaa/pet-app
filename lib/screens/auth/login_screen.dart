@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-// import 'package:firebase_auth/firebase_auth.dart';
-import '../../providers/auth_state_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
 
@@ -33,15 +33,15 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final authProvider = context.read<AuthStateProvider>();
-      await authProvider.signInWithEmail(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+      final authProvider = context.read<AuthProvider>();
+      await authProvider.signInWithEmailAndPassword(
+        _emailController.text.trim(),
+        _passwordController.text,
       );
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
-//     } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException catch (e) {
       String errorMessage;
       switch (e.code) {
         case 'user-not-found':
@@ -86,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final authProvider = context.read<AuthStateProvider>();
+      final authProvider = context.read<AuthProvider>();
       await authProvider.signInWithGoogle();
 
       if (!mounted) return;
@@ -135,7 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildHeader() {
     return Column(
       children: [
-        Icon(
+        const Icon(
           Icons.pets,
           size: 80,
           color: AppTheme.primaryGreen,
@@ -232,7 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: _isLoading
                     ? null
                     : () => Navigator.pushNamed(context, '/forgot-password'),
-                child: Text(
+                child: const Text(
                   'Forgot Password?',
                   style: TextStyle(
                     color: AppTheme.primaryGreen,
@@ -322,8 +322,8 @@ class _LoginScreenState extends State<LoginScreen> {
         TextButton(
           onPressed: _isLoading
               ? null
-              : () => Navigator.pushNamed(context, '/register'),  // Updated from '/signup' to '/register'
-          child: Text(
+              : () => Navigator.pushNamed(context, '/signup'),
+          child: const Text(
             'Sign Up',
             style: TextStyle(
               color: AppTheme.primaryGreen,

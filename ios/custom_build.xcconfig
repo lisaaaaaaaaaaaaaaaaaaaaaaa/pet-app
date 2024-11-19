@@ -1,3 +1,0 @@
-OTHER_CFLAGS = $(inherited) -fno-objc-msgsend-selector-stubs
-ENABLE_BITCODE = NO
-EXCLUDED_ARCHS[sdk=iphonesimulator*] = arm64

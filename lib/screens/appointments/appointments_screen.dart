@@ -158,10 +158,10 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('YES'),
             style: TextButton.styleFrom(
               foregroundColor: Colors.red,
             ),
+            child: const Text('YES'),
           ),
         ],
       ),

@@ -1,6 +1,5 @@
 // lib/models/pet_document.dart
 
-import 'package:flutter/foundation.dart';
 
 class PetDocument {
   final String id;

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/primary_button.dart';
-import '../../utils/validators.dart';
 
 class PetLifestyleScreen extends StatefulWidget {
   final Function(Map<String, dynamic>) onNext;

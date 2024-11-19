@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/pet_provider.dart';
 import '../../models/medication.dart';
-import '../../theme/app_theme.dart';
 
 class MedicationsScreen extends StatefulWidget {
   const MedicationsScreen({Key? key}) : super(key: key);

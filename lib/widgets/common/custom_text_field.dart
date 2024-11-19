@@ -40,14 +40,14 @@ class CustomTextField extends StatelessWidget {
       onChanged: onChanged,
       onFieldSubmitted: onSubmitted,
       enabled: enabled,
-      style: TextStyle(color: AppTheme.textDark),
+      style: const TextStyle(color: AppTheme.textDark),
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: icon != null ? Icon(icon, color: AppTheme.secondaryGreen) : null,
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: Colors.white,
-        labelStyle: TextStyle(color: AppTheme.secondaryGreen),
+        labelStyle: const TextStyle(color: AppTheme.secondaryGreen),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: AppTheme.borderColor),
@@ -58,7 +58,7 @@ class CustomTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppTheme.primaryGreen, width: 2),
+          borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

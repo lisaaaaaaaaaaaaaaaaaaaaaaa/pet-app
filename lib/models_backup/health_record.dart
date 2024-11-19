@@ -1,6 +1,5 @@
 // lib/models/health_record.dart
 
-import 'package:flutter/foundation.dart';
 
 class HealthRecord {
   final String id;

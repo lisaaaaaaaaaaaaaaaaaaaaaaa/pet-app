@@ -2,226 +2,142 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../models/subscription_plan.dart';
 import '../models/subscription.dart';
 import '../services/subscription_manager.dart';
 import '../services/analytics_service.dart';
-import '../services/auth_service.dart';
-import '../config/env.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PaymentHandler {
-  final AnalyticsService _analytics;
   final SubscriptionManager _subscriptionManager;
-  final AuthService _authService;
+  final AnalyticsService _analytics;
+  final String _apiUrl = 'YOUR_API_URL'; // Replace with your actual API URL
 
-  PaymentHandler(this._subscriptionManager, this._authService, this._analytics);
+  PaymentHandler({
+    required SubscriptionManager subscriptionManager,
+    required AnalyticsService analytics,
+  })  : _subscriptionManager = subscriptionManager,
+        _analytics = analytics;
 
-  Future<bool> processSubscription({
-    required BuildContext context,
-    required SubscriptionPlan plan,
-  }) async {
+  Future<void> startSubscription(BuildContext context, Subscription subscription) async {
     try {
-      // Get current user
-      final user = _authService.currentUser;
-      if (user == null) {
-        throw Exception('Please sign in to subscribe');
-      }
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('User not authenticated');
 
-      // Create subscription on backend
-      final response = await http.post(
-        Uri.parse(Environment.createSubscriptionUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await user.getIdToken()}',
-        },
-        body: json.encode({
-          'plan': plan.id,
-          'userId': user.uid,
-          'email': user.email,
-        }),
+      // Create payment intent
+      final paymentIntentResult = await _createPaymentIntent(
+        amount: subscription.price,
+        currency: 'usd',
+        customerId: user.uid,
       );
 
-      if (response.statusCode != 200) {
-        final error = json.decode(response.body)['error'];
-        throw Exception(error ?? 'Failed to create subscription');
-      }
+      if (paymentIntentResult == null) throw Exception('Failed to create payment intent');
 
-      final data = json.decode(response.body);
-
-      // Initialize payment sheet
+      // Confirm payment with Stripe
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: data['clientSecret'],
-          merchantDisplayName: 'Golden Years Pet Care',
-          customerId: data['customer'],
-          customerEphemeralKeySecret: data['ephemeralKey'],
-          style: ThemeMode.system,
-          appearance: PaymentSheetAppearance(
-            colors: PaymentSheetAppearanceColors(
-              primary: Theme.of(context).primaryColor,
-            ),
-            shapes: PaymentSheetShape(
-              borderRadius: 12,
-              shadow: PaymentSheetShadowParams(color: Colors.black),
-            ),
-          ),
+          paymentIntentClientSecret: paymentIntentResult['clientSecret'],
+          merchantDisplayName: 'Golden Years',
+          customerId: user.uid,
+          customerEphemeralKeySecret: paymentIntentResult['ephemeralKey'],
         ),
       );
 
-      // Present payment sheet
       await Stripe.instance.presentPaymentSheet();
 
-      // Create subscription object
-      final subscription = Subscription(
-        id: data['subscriptionId'],
-        startDate: DateTime.now(),
-        endDate: DateTime.now().add(const Duration(days: 30)),
-        isTrialPeriod: false,
-        isActive: true,
-        price: plan.price,
-        status: Subscription.STATUS_ACTIVE,
-        customerId: data['customer'],
-        subscriptionId: data['subscriptionId'],
-      );
-
-      // Activate subscription
+      // If we get here, payment was successful
       await _subscriptionManager.activateSubscription(subscription);
-
-      // Log analytics event
+      
+      // Log successful subscription
       await _analytics.logSubscription(
-        planId: plan.id,
-        planName: plan.name,
-        amount: plan.price,
-        userId: user.uid,
+        id: subscription.id,
+        amount: subscription.price,
+        currency: 'usd',
       );
 
-      _showSuccess(context);
-      return true;
-
-    } on StripeException catch (e) {
-      _showError(context, 'Payment failed: ${e.error.localizedMessage}');
-      return false;
+      // Show success message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Subscription activated successfully!')),
+        );
+      }
     } catch (e) {
-      _showError(context, e.toString());
-      return false;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+      rethrow;
     }
   }
 
-  Future<bool> cancelSubscription(BuildContext context) async {
+  Future<void> cancelCurrentSubscription(BuildContext context) async {
     try {
-      final user = _authService.currentUser;
-      if (user == null) throw Exception('Please sign in to manage subscription');
-
       final currentSubscription = _subscriptionManager.currentSubscription;
       if (currentSubscription == null) {
         throw Exception('No active subscription found');
       }
 
+      // Call your backend to cancel the subscription
       final response = await http.post(
-        Uri.parse(Environment.cancelSubscriptionUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await user.getIdToken()}',
-        },
-        body: json.encode({
-          'subscriptionId': currentSubscription.subscriptionId,
-          'userId': user.uid,
+        Uri.parse('$_apiUrl/cancel-subscription'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'subscriptionId': currentSubscription.id,
         }),
       );
 
-      if (response.statusCode == 200) {
-        await _subscriptionManager.cancelSubscription();
-        _showSuccess(context, message: 'Subscription cancelled successfully');
-        
-        await _analytics.logCancellation(
-          subscriptionId: currentSubscription.id,
-          userId: user.uid,
-          reason: 'user_initiated',
+      if (response.statusCode != 200) {
+        throw Exception('Failed to cancel subscription');
+      }
+
+      // Update local subscription status
+      await _subscriptionManager.cancelSubscription();
+
+      // Log cancellation
+      await _analytics.logCancellation(
+        id: currentSubscription.id,
+        reason: 'user_initiated',
+      );
+
+      // Show success message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Subscription cancelled successfully')),
         );
-        
-        return true;
-      } else {
-        final error = json.decode(response.body)['error'];
-        throw Exception(error ?? 'Failed to cancel subscription');
       }
     } catch (e) {
-      _showError(context, e.toString());
-      return false;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+      rethrow;
     }
   }
 
-  Future<bool> updatePaymentMethod({
-    required BuildContext context,
-    required String paymentMethodId,
+  Future<Map<String, dynamic>?> _createPaymentIntent({
+    required int amount,
+    required String currency,
+    required String customerId,
   }) async {
     try {
-      final user = _authService.currentUser;
-      if (user == null) throw Exception('Please sign in to update payment method');
-
       final response = await http.post(
-        Uri.parse(Environment.updatePaymentMethodUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await user.getIdToken()}',
-        },
-        body: json.encode({
-          'paymentMethodId': paymentMethodId,
-          'userId': user.uid,
+        Uri.parse('$_apiUrl/create-payment-intent'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'amount': amount,
+          'currency': currency,
+          'customer': customerId,
         }),
       );
 
       if (response.statusCode == 200) {
-        _showSuccess(context, message: 'Payment method updated successfully');
-        return true;
-      } else {
-        final error = json.decode(response.body)['error'];
-        throw Exception(error ?? 'Failed to update payment method');
+        return jsonDecode(response.body);
       }
+      return null;
     } catch (e) {
-      _showError(context, e.toString());
-      return false;
+      debugPrint('Error creating payment intent: $e');
+      return null;
     }
-  }
-
-  void _showSuccess(BuildContext context, {String message = 'Subscription successful!'}) {
-    if (!context.mounted) return;
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        action: SnackBarAction(
-          label: 'OK',
-          textColor: Colors.white,
-          onPressed: () {},
-        ),
-      ),
-    );
-  }
-
-  void _showError(BuildContext context, String message) {
-    if (!context.mounted) return;
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        action: SnackBarAction(
-          label: 'OK',
-          textColor: Colors.white,
-          onPressed: () {},
-        ),
-      ),
-    );
   }
 }

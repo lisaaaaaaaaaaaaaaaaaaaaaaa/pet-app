@@ -279,9 +279,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Container(
           width: 100,
           padding: const EdgeInsets.all(8),
-          child: Column(
+          child: const Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
+            children: [
               CircleAvatar(
                 radius: 30,
                 backgroundColor: AppTheme.primaryColor,

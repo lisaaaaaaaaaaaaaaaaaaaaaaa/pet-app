@@ -1,6 +1,5 @@
 // lib/models/pain_record.dart
 
-import 'package:flutter/foundation.dart';
 
 class PainRecord {
   final String id;

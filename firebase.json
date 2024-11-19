@@ -1,1 +1,16 @@
-{"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}]},"flutter":{"platforms":{"android":{"default":{"projectId":"golden-years-16899","appId":"1:88866774455:android:6c8b081a27967ec0989c32","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"golden-years-16899","appId":"1:88866774455:ios:27189e546fa9e772989c32","uploadDebugSymbols":true,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"macos":{"default":{"projectId":"golden-years-16899","appId":"1:88866774455:ios:8164f311422555b5989c32","uploadDebugSymbols":true,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"golden-years-16899","configurations":{"android":"1:88866774455:android:6c8b081a27967ec0989c32","ios":"1:88866774455:ios:27189e546fa9e772989c32","macos":"1:88866774455:ios:8164f311422555b5989c32","web":"1:88866774455:web:4a4dd855b8c4755b989c32","windows":"1:88866774455:web:611a53f37b7187c6989c32"}}}}}}
+{
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

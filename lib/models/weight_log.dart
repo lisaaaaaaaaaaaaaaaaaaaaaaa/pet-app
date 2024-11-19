@@ -47,7 +47,7 @@ class WeightLog {
     this.status = WeightStatus.normal,
     this.goals,
     this.measurements,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

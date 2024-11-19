@@ -51,7 +51,7 @@ class HealthMetrics {
     this.diagnosticTests,
     this.vetNotes,
     this.followUpDate,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

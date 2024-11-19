@@ -16,6 +16,8 @@ import '../../widgets/settings/settings_section.dart';
 class SettingsScreen extends StatefulWidget {
   static const routeName = '/settings';
 
+  const SettingsScreen({super.key});
+
   @override
   _SettingsScreenState createState() => _SettingsScreenState();
 }
@@ -51,7 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _handleLogout(BuildContext context) async {
     final bool? confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => ConfirmationDialog(
+      builder: (context) => const ConfirmationDialog(
         title: 'Logout',
         content: 'Are you sure you want to logout?',
         confirmText: 'Logout',
@@ -77,7 +79,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _handleDeleteAccount(BuildContext context) async {
     final bool? confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => ConfirmationDialog(
+      builder: (context) => const ConfirmationDialog(
         title: 'Delete Account',
         content: 'Are you sure you want to permanently delete your account? This action cannot be undone.',
         confirmText: 'Delete',
@@ -111,7 +113,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         Scaffold(
           appBar: AppBar(
-            title: Text('Settings'),
+            title: const Text('Settings'),
             elevation: 0,
           ),
           body: ListView(
@@ -135,7 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle: 'Adjust the text size',
                     trailing: DropdownButton<double>(
                       value: userPreferences.textScaleFactor,
-                      items: [
+                      items: const [
                         DropdownMenuItem(value: 0.8, child: Text('Small')),
                         DropdownMenuItem(value: 1.0, child: Text('Normal')),
                         DropdownMenuItem(value: 1.2, child: Text('Large')),
@@ -217,7 +219,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
-        if (_isLoading) LoadingOverlay(),
+        if (_isLoading) const LoadingOverlay(),
       ],
     );
   }

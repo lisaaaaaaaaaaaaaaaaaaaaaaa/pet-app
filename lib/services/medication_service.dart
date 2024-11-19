@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'core/base_service.dart';
 import '../models/medication.dart';
@@ -9,7 +9,7 @@ import '../utils/exceptions.dart';
 import '../utils/notification_helper.dart';
 
 class MedicationService extends BaseService {
-//   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final NotificationHelper _notificationHelper = NotificationHelper();
   
   static final MedicationService _instance = MedicationService._internal();

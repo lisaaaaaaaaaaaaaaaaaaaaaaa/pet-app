@@ -311,17 +311,17 @@ class _HealthRecordsScreenState extends State<HealthRecordsScreen> {
   Widget _buildFilterSheet() {
     return Container(
       padding: const EdgeInsets.all(16),
-      child: Column(
+      child: const Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
+          Text(
             'Filter Records',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           // Add filter options here
         ],
       ),
@@ -331,17 +331,17 @@ class _HealthRecordsScreenState extends State<HealthRecordsScreen> {
   Widget _buildSortSheet() {
     return Container(
       padding: const EdgeInsets.all(16),
-      child: Column(
+      child: const Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
+          Text(
             'Sort Records',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           // Add sort options here
         ],
       ),

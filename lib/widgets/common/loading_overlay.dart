@@ -180,13 +180,13 @@ class ControlledLoadingOverlay extends StatelessWidget {
       listenable: controller,
       builder: (context, child) {
         return LoadingOverlay(
-          child: child!,
           isLoading: controller.isLoading,
           loadingText: controller.loadingText,
           loadingWidget: loadingWidget,
           barrierColor: barrierColor,
           dismissible: dismissible,
           opacity: opacity,
+          child: child!,
         );
       },
       child: child,

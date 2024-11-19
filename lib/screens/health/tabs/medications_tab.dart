@@ -167,7 +167,7 @@ class _MedicationCard extends StatelessWidget {
                       color: AppTheme.primaryGreen.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.medication_outlined,
                       color: AppTheme.primaryGreen,
                     ),

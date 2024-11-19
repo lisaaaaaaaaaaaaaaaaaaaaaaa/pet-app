@@ -1,24 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';  // Correct import
 import 'firebase_options.dart';
+import 'routes/app_router.dart';
+import 'services/auth_provider.dart';
+import 'services/subscription_manager.dart';
+import 'theme/app_theme.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
+  // Initialize SharedPreferences
+  final prefs = await SharedPreferences.getInstance();
+  
+  runApp(MyApp(prefs: prefs));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final SharedPreferences prefs;
+  
+  const MyApp({
+    Key? key,
+    required this.prefs,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Golden Years Pet App',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const Scaffold(
-        body: Center(
-          child: Text('Temporary Home'),
-        ),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => SubscriptionManager(prefs)),
+      ],
+      child: MaterialApp(
+        title: 'Golden Years',
+        theme: AppTheme.theme,
+        initialRoute: '/',
+        onGenerateRoute: AppRouter.generateRoute,
       ),
     );
   }

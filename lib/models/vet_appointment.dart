@@ -57,7 +57,7 @@ class VetAppointment {
     this.status = AppointmentStatus.scheduled,
     this.reminders,
     this.history,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

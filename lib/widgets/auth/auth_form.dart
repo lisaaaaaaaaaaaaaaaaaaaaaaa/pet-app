@@ -136,7 +136,7 @@ class _AuthFormState extends State<AuthForm> {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: widget.isLoading ? null : widget.onForgotPassword,
-                child: Text(
+                child: const Text(
                   'Forgot Password?',
                   style: AuthStyles.linkStyle,
                 ),

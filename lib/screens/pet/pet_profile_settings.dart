@@ -105,7 +105,8 @@ class _PetProfileSettingsState extends State<PetProfileSettings> {
     return result ?? false;
   }
 
-[Rest of the PetProfileSettings code you shared, including all build methods and helper functions]
+[Rest of the PetProfileSettings code you shared, including @override
+  all build methods and helper functions]
 
   void _showSubscriptionRequired() {
     showDialog(

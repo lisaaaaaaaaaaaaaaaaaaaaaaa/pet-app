@@ -57,7 +57,7 @@ class PetReminder {
     this.category,
     this.customFields,
     this.requiresVerification = false,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

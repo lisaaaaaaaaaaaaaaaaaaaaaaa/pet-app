@@ -158,13 +158,12 @@ class ActivityTrackerCard extends StatelessWidget {
             Icons.local_fire_department_outlined,
             Colors.red,
           ),
-        if (activity.duration != null)
-          _buildDetailItem(
-            'Duration',
-            activity.duration!,
-            Icons.timer_outlined,
-            Colors.blue,
-          ),
+        _buildDetailItem(
+          'Duration',
+          activity.duration!,
+          Icons.timer_outlined,
+          Colors.blue,
+        ),
       ],
     );
   }

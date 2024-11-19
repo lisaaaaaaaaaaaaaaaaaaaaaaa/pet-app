@@ -74,7 +74,7 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
+            colorScheme: const ColorScheme.light(
               primary: AppTheme.primaryGreen,
             ),
           ),
@@ -158,7 +158,7 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
             color: AppTheme.primaryGreen.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
+          child: const Icon(
             Icons.medical_information_outlined,
             color: AppTheme.primaryGreen,
           ),

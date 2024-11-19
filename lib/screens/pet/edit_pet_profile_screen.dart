@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../providers/pet_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../../models/pet_profile.dart';
-import '../../theme/app_theme.dart';
-import '../../widgets/common/loading_overlay.dart';
 import '../../widgets/common/image_picker_bottom_sheet.dart';
-import '../../utils/validators.dart';
 import '../../utils/date_formatters.dart';
-import '../../utils/image_helper.dart';
 
 class EditPetProfileScreen extends StatefulWidget {
   final String petId;

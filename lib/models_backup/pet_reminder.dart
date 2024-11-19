@@ -241,7 +241,7 @@ class PetReminder {
   double _calculateComplianceScore() {
     final completionRate = _calculateCompletionRate();
     final averageDelay = _calculateAverageDelay();
-    final maxDelay = Duration(days: 7);
+    final maxDelay = const Duration(days: 7);
     final delayFactor = 1 - (averageDelay.inHours / maxDelay.inHours);
     return (completionRate + delayFactor) / 2;
   }

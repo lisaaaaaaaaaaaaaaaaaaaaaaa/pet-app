@@ -402,7 +402,7 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.check_circle,
                       color: Colors.green,
                       size: 20,
@@ -515,14 +515,14 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
   }
 
   Widget _buildAddVaccinationForm() {
-    final _formKey = GlobalKey<FormState>();
-    final _nameController = TextEditingController();
-    final _notesController = TextEditingController();
-    DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
-    bool _setReminder = true;
-    List<int> _reminderDays = [1, 3, 7];
-    bool _isRecurring = false;
-    int _recurringMonths = 12;
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController();
+    final notesController = TextEditingController();
+    DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
+    bool setReminder = true;
+    List<int> reminderDays = [1, 3, 7];
+    bool isRecurring = false;
+    int recurringMonths = 12;
 
     return StatefulBuilder(
       builder: (context, setState) {
@@ -534,7 +534,7 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
             top: 16,
           ),
           child: Form(
-            key: _formKey,
+            key: formKey,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -558,7 +558,7 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
                   ),
                   const SizedBox(height: 24),
                   TextFormField(
-                    controller: _nameController,
+                    controller: nameController,
                     decoration: InputDecoration(
                       labelText: 'Vaccination Name',
                       border: OutlineInputBorder(
@@ -579,7 +579,7 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
                     onTap: () async {
                       final DateTime? picked = await showDatePicker(
                         context: context,
-                        initialDate: _selectedDate,
+                        initialDate: selectedDate,
                         firstDate: DateTime.now(),
                         lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
                         builder: (context, child) {
@@ -595,7 +595,7 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
                       );
                       if (picked != null) {
                         setState(() {
-                          _selectedDate = picked;
+                          selectedDate = picked;
                         });
                       }
                     },
@@ -608,13 +608,13 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
                         prefixIcon: const Icon(Icons.calendar_today),
                       ),
                       child: Text(
-                        DateFormat('MMM d, y').format(_selectedDate),
+                        DateFormat('MMM d, y').format(selectedDate),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
-                    controller: _notesController,
+                    controller: notesController,
                     decoration: InputDecoration(
                       labelText: 'Notes',
                       border: OutlineInputBorder(
@@ -628,14 +628,14 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
                   SwitchListTile(
                     title: const Text('Set Reminder'),
                     subtitle: const Text('Get notified before due date'),
-                    value: _setReminder,
+                    value: setReminder,
                     onChanged: (bool value) {
                       setState(() {
-                        _setReminder = value;
+                        setReminder = value;
                       });
                     },
                   ),
-                  if (_setReminder) ...[
+                  if (setReminder) ...[
                     const SizedBox(height: 8),
                     const Text(
                       'Remind me before:',
@@ -647,16 +647,16 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
                     Wrap(
                       spacing: 8,
                       children: [1, 3, 7, 14, 30].map((days) {
-                        final isSelected = _reminderDays.contains(days);
+                        final isSelected = reminderDays.contains(days);
                         return FilterChip(
                           label: Text('$days ${days == 1 ? 'day' : 'days'}'),
                           selected: isSelected,
                           onSelected: (bool selected) {
                             setState(() {
                               if (selected) {
-                                _reminderDays.add(days);
+                                reminderDays.add(days);
                               } else {
-                                _reminderDays.remove(days);
+                                reminderDays.remove(days);
                               }
                             });
                           },
@@ -670,17 +670,17 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
                   SwitchListTile(
                     title: const Text('Recurring Vaccination'),
                     subtitle: const Text('Automatically schedule next dose'),
-                    value: _isRecurring,
+                    value: isRecurring,
                     onChanged: (bool value) {
                       setState(() {
-                        _isRecurring = value;
+                        isRecurring = value;
                       });
                     },
                   ),
-                  if (_isRecurring) ...[
+                  if (isRecurring) ...[
                     const SizedBox(height: 8),
                     DropdownButtonFormField<int>(
-                      value: _recurringMonths,
+                      value: recurringMonths,
                       decoration: InputDecoration(
                         labelText: 'Repeat Every',
                         border: OutlineInputBorder(
@@ -695,7 +695,7 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
                           .toList(),
                       onChanged: (value) {
                         setState(() {
-                          _recurringMonths = value!;
+                          recurringMonths = value!;
                         });
                       },
                     ),
@@ -703,26 +703,26 @@ class _VaccinationScheduleScreenState extends State<VaccinationScheduleScreen>
                   const SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: () async {
-                      if (_formKey.currentState!.validate()) {
+                      if (formKey.currentState!.validate()) {
                         try {
                           final vaccination = Vaccination(
                             id: DateTime.now().millisecondsSinceEpoch.toString(),
-                            name: _nameController.text.trim(),
-                            dueDate: _selectedDate,
-                            notes: _notesController.text.trim(),
+                            name: nameController.text.trim(),
+                            dueDate: selectedDate,
+                            notes: notesController.text.trim(),
                             isCompleted: false,
-                            isRecurring: _isRecurring,
-                            recurringMonths: _isRecurring ? _recurringMonths : null,
+                            isRecurring: isRecurring,
+                            recurringMonths: isRecurring ? recurringMonths : null,
                           );
 
                           await context
                               .read<PetProvider>()
                               .addVaccination(vaccination);
 
-                          if (_setReminder) {
+                          if (setReminder) {
                             await NotificationService().scheduleVaccinationReminders(
                               vaccination: vaccination,
-                              reminderDays: _reminderDays,
+                              reminderDays: reminderDays,
                             );
                           }
 

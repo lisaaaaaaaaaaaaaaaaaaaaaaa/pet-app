@@ -1,33 +1,33 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:firebase_storage/firebase_storage.dart';
-// import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:path/path.dart' as path;
 import '../utils/logger.dart';
 import 'dart:io';
 import 'dart:async';
 
 class DocumentManagementProvider with ChangeNotifier {
-//   final FirebaseFirestore _firestore;
-//   final FirebaseStorage _storage;
+  final FirebaseFirestore _firestore;
+  final FirebaseStorage _storage;
   final FirebaseAnalytics _analytics;
   final Logger _logger;
 
-  Map<String, List<PetDocument>> _documents = {};
-  Map<String, DateTime> _lastUpdated = {};
+  final Map<String, List<PetDocument>> _documents = {};
+  final Map<String, DateTime> _lastUpdated = {};
   bool _isLoading = false;
   String? _error;
   Timer? _cleanupTimer;
   final Duration _cacheExpiration = const Duration(hours: 1);
 
   DocumentManagementProvider({
-//     FirebaseFirestore? firestore,
-//     FirebaseStorage? storage,
+    FirebaseFirestore? firestore,
+    FirebaseStorage? storage,
     FirebaseAnalytics? analytics,
     Logger? logger,
   }) : 
-//     _firestore = firestore ?? FirebaseFirestore.instance,
-//     _storage = storage ?? FirebaseStorage.instance,
+    _firestore = firestore ?? FirebaseFirestore.instance,
+    _storage = storage ?? FirebaseStorage.instance,
     _analytics = analytics ?? FirebaseAnalytics.instance,
     _logger = logger ?? Logger() {
     _initializeListeners();
@@ -312,7 +312,7 @@ class DocumentManagementProvider with ChangeNotifier {
 
   Future<void> _validateFile(File file) async {
     final size = await file.length();
-    final maxSize = 20 * 1024 * 1024; // 20MB
+    const maxSize = 20 * 1024 * 1024; // 20MB
 
     if (size > maxSize) {
       throw DocumentException('File size exceeds 20MB limit');

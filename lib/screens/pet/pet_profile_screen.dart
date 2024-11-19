@@ -6,7 +6,6 @@ import '../../providers/pet_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../../models/pet.dart';
 import '../../models/pet_profile.dart';
-import '../../theme/app_theme.dart';
 import '../../widgets/common/loading_overlay.dart';
 import '../../widgets/common/error_view.dart';
 import '../../widgets/common/confirmation_dialog.dart';

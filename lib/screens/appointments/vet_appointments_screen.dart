@@ -411,17 +411,17 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
               ],
               if (appointment.isCompleted) ...[
                 const SizedBox(height: 12),
-                Row(
+                const Row(
                   children: [
                     Icon(
                       Icons.check_circle,
                       color: Colors.green,
                       size: 20,
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     Text(
                       'Completed',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.green,
                         fontWeight: FontWeight.w500,
                       ),
@@ -539,13 +539,13 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
   }
 
   Widget _buildAppointmentForm({Appointment? appointment}) {
-    final _formKey = GlobalKey<FormState>();
-    final _vetNameController = TextEditingController(text: appointment?.vetName);
-    final _reasonController = TextEditingController(text: appointment?.reason);
-    DateTime _selectedDate = appointment?.dateTime ?? DateTime.now().add(const Duration(days: 1));
-    TimeOfDay _selectedTime = TimeOfDay.fromDateTime(appointment?.dateTime ?? DateTime.now());
-    bool _setReminder = true;
-    List<int> _reminderMinutes = [60, 24 * 60, 7 * 24 * 60]; // 1 hour, 1 day, 1 week
+    final formKey = GlobalKey<FormState>();
+    final vetNameController = TextEditingController(text: appointment?.vetName);
+    final reasonController = TextEditingController(text: appointment?.reason);
+    DateTime selectedDate = appointment?.dateTime ?? DateTime.now().add(const Duration(days: 1));
+    TimeOfDay selectedTime = TimeOfDay.fromDateTime(appointment?.dateTime ?? DateTime.now());
+    bool setReminder = true;
+    List<int> reminderMinutes = [60, 24 * 60, 7 * 24 * 60]; // 1 hour, 1 day, 1 week
 
     return StatefulBuilder(
       builder: (context, setState) {
@@ -557,7 +557,7 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
             top: 16,
           ),
           child: Form(
-            key: _formKey,
+            key: formKey,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -581,7 +581,7 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
                   ),
                   const SizedBox(height: 24),
                   TextFormField(
-                    controller: _vetNameController,
+                    controller: vetNameController,
                     decoration: InputDecoration(
                       labelText: 'Veterinarian Name',
                       border: OutlineInputBorder(
@@ -605,12 +605,12 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
                           onTap: () async {
                             final DateTime? picked = await showDatePicker(
                               context: context,
-                              initialDate: _selectedDate,
+                              initialDate: selectedDate,
                               firstDate: DateTime.now(),
                               lastDate: DateTime.now().add(const Duration(days: 365)),
                             );
                             if (picked != null) {
-                              setState(() => _selectedDate = picked);
+                              setState(() => selectedDate = picked);
                             }
                           },
                           child: InputDecorator(
@@ -622,7 +622,7 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
                               prefixIcon: const Icon(Icons.calendar_today),
                             ),
                             child: Text(
-                              DateFormat('MMM d, y').format(_selectedDate),
+                              DateFormat('MMM d, y').format(selectedDate),
                             ),
                           ),
                         ),
@@ -633,10 +633,10 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
                           onTap: () async {
                             final TimeOfDay? picked = await showTimePicker(
                               context: context,
-                              initialTime: _selectedTime,
+                              initialTime: selectedTime,
                             );
                             if (picked != null) {
-                              setState(() => _selectedTime = picked);
+                              setState(() => selectedTime = picked);
                             }
                           },
                           child: InputDecorator(
@@ -648,7 +648,7 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
                               prefixIcon: const Icon(Icons.access_time),
                             ),
                             child: Text(
-                              _selectedTime.format(context),
+                              selectedTime.format(context),
                             ),
                           ),
                         ),
@@ -657,7 +657,7 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
-                    controller: _reasonController,
+                    controller: reasonController,
                     decoration: InputDecoration(
                       labelText: 'Reason for Visit',
                       border: OutlineInputBorder(
@@ -671,53 +671,53 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
                   SwitchListTile(
                     title: const Text('Set Reminder'),
                     subtitle: const Text('Get notified before the appointment'),
-                    value: _setReminder,
+                    value: setReminder,
                     onChanged: (bool value) {
                       setState(() {
-                        _setReminder = value;
+                        setReminder = value;
                       });
                     },
                   ),
-                  if (_setReminder) ...[
+                  if (setReminder) ...[
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       children: [
                         FilterChip(
                           label: const Text('1 hour before'),
-                          selected: _reminderMinutes.contains(60),
+                          selected: reminderMinutes.contains(60),
                           onSelected: (selected) {
                             setState(() {
                               if (selected) {
-                                _reminderMinutes.add(60);
+                                reminderMinutes.add(60);
                               } else {
-                                _reminderMinutes.remove(60);
+                                reminderMinutes.remove(60);
                               }
                             });
                           },
                         ),
                         FilterChip(
                           label: const Text('1 day before'),
-                          selected: _reminderMinutes.contains(24 * 60),
+                          selected: reminderMinutes.contains(24 * 60),
                           onSelected: (selected) {
                             setState(() {
                               if (selected) {
-                                _reminderMinutes.add(24 * 60);
+                                reminderMinutes.add(24 * 60);
                               } else {
-                                _reminderMinutes.remove(24 * 60);
+                                reminderMinutes.remove(24 * 60);
                               }
                             });
                           },
                         ),
                         FilterChip(
                           label: const Text('1 week before'),
-                          selected: _reminderMinutes.contains(7 * 24 * 60),
+                          selected: reminderMinutes.contains(7 * 24 * 60),
                           onSelected: (selected) {
                             setState(() {
                               if (selected) {
-                                _reminderMinutes.add(7 * 24 * 60);
+                                reminderMinutes.add(7 * 24 * 60);
                               } else {
-                                _reminderMinutes.remove(7 * 24 * 60);
+                                reminderMinutes.remove(7 * 24 * 60);
                               }
                             });
                           },
@@ -728,22 +728,22 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
                   const SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: () async {
-                      if (_formKey.currentState!.validate()) {
+                      if (formKey.currentState!.validate()) {
                         try {
                           final dateTime = DateTime(
-                            _selectedDate.year,
-                            _selectedDate.month,
-                            _selectedDate.day,
-                            _selectedTime.hour,
-                            _selectedTime.minute,
+                            selectedDate.year,
+                            selectedDate.month,
+                            selectedDate.day,
+                            selectedTime.hour,
+                            selectedTime.minute,
                           );
 
                           final newAppointment = Appointment(
                             id: appointment?.id ??
                                 DateTime.now().millisecondsSinceEpoch.toString(),
-                            vetName: _vetNameController.text.trim(),
+                            vetName: vetNameController.text.trim(),
                             dateTime: dateTime,
-                            reason: _reasonController.text.trim(),
+                            reason: reasonController.text.trim(),
                             isCompleted: false,
                           );
 
@@ -757,11 +757,11 @@ class _VetAppointmentScreenState extends State<VetAppointmentScreen>
                                 .updateAppointment(newAppointment);
                           }
 
-                          if (_setReminder) {
+                          if (setReminder) {
                             await NotificationService()
                                 .scheduleAppointmentReminders(
                               appointment: newAppointment,
-                              reminderMinutes: _reminderMinutes,
+                              reminderMinutes: reminderMinutes,
                             );
                           }
 

@@ -35,7 +35,7 @@ class _PetOnboardingScreenState extends State<PetOnboardingScreen> {
   }
 
   void _initializeOnboarding() {
-    _pet = Pet();
+    _pet = const Pet();
     _steps = [
       OnboardingStep(
         title: 'Basic Information',
@@ -133,7 +133,7 @@ class _PetOnboardingScreenState extends State<PetOnboardingScreen> {
     final petProvider = context.read<PetProvider>();
     await petProvider.addPet(_pet);
     if (subscriptionInfo['isPremium'] == true) {
-      await petProvider.upgradeToPremium(_pet.id!);
+      await petProvider.upgradeToPremium(_pet.id);
     }
   }
   // ... (continued in next part)
@@ -228,7 +228,7 @@ class _PetOnboardingScreenState extends State<PetOnboardingScreen> {
       onWillPop: _handleBack,
       child: Scaffold(
         key: _scaffoldKey,
-        backgroundColor: theme.colorScheme.background,
+        backgroundColor: theme.colorScheme.surface,
         body: SafeArea(
           child: Stack(
             children: [
@@ -289,7 +289,7 @@ class _PetOnboardingScreenState extends State<PetOnboardingScreen> {
         steps: _steps.length,
         currentStep: _currentPage + 1,
         progressColor: theme.colorScheme.primary,
-        backgroundColor: theme.colorScheme.surfaceVariant,
+        backgroundColor: theme.colorScheme.surfaceContainerHighest,
       ),
     );
   }

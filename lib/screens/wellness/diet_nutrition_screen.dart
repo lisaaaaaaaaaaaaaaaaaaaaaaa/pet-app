@@ -10,8 +10,6 @@ import '../../models/food_item.dart';
 import '../../models/diet_record.dart';
 import '../../models/nutrition_goal.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/constants.dart';
-import '../../utils/date_formatter.dart';
 import '../../widgets/common/custom_card.dart';
 import '../../widgets/common/error_dialog.dart';
 import '../../widgets/common/loading_indicator.dart';
@@ -25,7 +23,6 @@ import '../../widgets/quick_action_card.dart';
 import '../../widgets/weight_chart.dart';
 import '../../widgets/dialogs/add_meal_dialog.dart';
 import '../../widgets/dialogs/add_food_dialog.dart';
-import '../../widgets/dialogs/diet_record_details_dialog.dart';
 
 class DietNutritionScreen extends StatefulWidget {
   const DietNutritionScreen({Key? key}) : super(key: key);

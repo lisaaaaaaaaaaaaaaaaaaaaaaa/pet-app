@@ -329,7 +329,7 @@ class _MedicationManagerScreenState extends State<MedicationManagerScreen>
         return SingleChildScrollView(
           controller: scrollController,
           padding: const EdgeInsets.all(16),
-          child: Column(
+          child: const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Add medication details widgets here
@@ -341,8 +341,7 @@ class _MedicationManagerScreenState extends State<MedicationManagerScreen>
   }
 
   String _getNextDoseTime(Medication medication) {
-    if (medication.nextDose == null) return 'No doses';
-    return DateFormat('h:mm a').format(medication.nextDose!);
+    return DateFormat('h:mm a').format(medication.nextDose);
   }
 
   Color _getMedicationColor(String type) {

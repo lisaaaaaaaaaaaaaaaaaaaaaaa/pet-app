@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'core/base_service.dart';
 import '../models/vet_appointment.dart';
 import '../models/veterinarian.dart';
@@ -8,7 +8,7 @@ import '../utils/exceptions.dart';
 import '../utils/date_utils.dart';
 
 class VetAppointmentService extends BaseService {
-//   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
   static final VetAppointmentService _instance = VetAppointmentService._internal();
   factory VetAppointmentService() => _instance;

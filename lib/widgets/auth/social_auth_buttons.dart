@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import 'auth_button.dart';
 
 class SocialAuthButtons extends StatelessWidget {
   final bool isLoading;

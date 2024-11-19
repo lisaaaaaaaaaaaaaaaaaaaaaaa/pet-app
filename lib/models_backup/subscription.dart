@@ -1,6 +1,5 @@
 // lib/models/subscription.dart
 
-import 'package:flutter/foundation.dart';
 
 class Subscription {
   // Existing properties...

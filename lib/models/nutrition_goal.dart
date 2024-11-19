@@ -53,7 +53,7 @@ class NutritionGoal {
     this.mealPlan,
     this.supplements,
     this.weeklyProgress,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

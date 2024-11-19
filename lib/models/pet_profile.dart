@@ -67,7 +67,7 @@ class PetProfile {
     this.isActive = true,
     this.insuranceInfo,
     this.emergencyContacts,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

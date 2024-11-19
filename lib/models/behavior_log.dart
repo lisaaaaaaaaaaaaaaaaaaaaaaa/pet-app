@@ -50,7 +50,7 @@ class BehaviorLog {
     this.category = BehaviorCategory.other,
     this.environmentalFactors,
     this.stressLevel,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

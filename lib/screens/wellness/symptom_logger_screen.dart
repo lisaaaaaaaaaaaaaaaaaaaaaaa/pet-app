@@ -19,7 +19,7 @@ class _SymptomLoggerScreenState extends State<SymptomLoggerScreen> {
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
   String _selectedSeverity = 'Mild';
-  List<String> _selectedSymptoms = [];
+  final List<String> _selectedSymptoms = [];
   bool _isLoading = false;
 
   final List<String> _severityLevels = ['Mild', 'Moderate', 'Severe'];
@@ -277,9 +277,9 @@ class _SymptomLoggerScreenState extends State<SymptomLoggerScreen> {
                   });
                 },
           style: ButtonStyle(
-            backgroundColor: MaterialStateProperty.resolveWith<Color>(
-              (Set<MaterialState> states) {
-                if (states.contains(MaterialState.selected)) {
+            backgroundColor: WidgetStateProperty.resolveWith<Color>(
+              (Set<WidgetState> states) {
+                if (states.contains(WidgetState.selected)) {
                   return AppColors.primary;
                 }
                 return Colors.transparent;

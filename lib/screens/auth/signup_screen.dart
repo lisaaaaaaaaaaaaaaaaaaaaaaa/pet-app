@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
-// import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
@@ -57,7 +57,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/verify-email');
-//     } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException catch (e) {
       String errorMessage;
       switch (e.code) {
         case 'email-already-in-use':
@@ -288,7 +288,7 @@ class _SignupScreenState extends State<SignupScreen> {
               children: [
                 TextSpan(
                   text: 'Terms of Service',
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppTheme.primaryGreen,
                     fontWeight: FontWeight.bold,
                   ),
@@ -300,7 +300,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 const TextSpan(text: ' and '),
                 TextSpan(
                   text: 'Privacy Policy',
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppTheme.primaryGreen,
                     fontWeight: FontWeight.bold,
                   ),

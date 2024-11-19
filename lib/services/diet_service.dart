@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'core/base_service.dart';
 import '../models/diet_record.dart';
 import '../models/food_item.dart';
@@ -7,7 +7,7 @@ import '../models/meal_schedule.dart';
 import '../utils/exceptions.dart';
 
 class DietService extends BaseService {
-//   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
   static final DietService _instance = DietService._internal();
   factory DietService() => _instance;
@@ -311,7 +311,7 @@ class DietService extends BaseService {
           ? totalPortionSize / totalMeals 
           : 0.0,
       'mostCommonFood': mostCommonFood,
-      'caloriesPerDay': records.length > 0 
+      'caloriesPerDay': records.isNotEmpty 
           ? totalCalories / records.length 
           : 0.0,
     };

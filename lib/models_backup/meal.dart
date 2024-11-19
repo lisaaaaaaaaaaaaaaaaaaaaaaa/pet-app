@@ -445,9 +445,7 @@ class Meal extends Equatable {
       'mealName': name,
       'scheduledTime': scheduledTime,
       'actualFeedingTime': servedAt,
-      'timingDeviation': servedAt != null 
-          ? servedAt!.difference(scheduledTime).inMinutes 
-          : null,
+      'timingDeviation': servedAt?.difference(scheduledTime).inMinutes,
       'portionServed': portion,
       'portionConsumed': consumedAmount,
       'consumptionRate': getConsumptionRate(),

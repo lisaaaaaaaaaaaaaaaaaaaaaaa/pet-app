@@ -19,7 +19,7 @@ class SubscriptionScreen extends StatefulWidget {
 }
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
-  bool _isSubscribed = false;
+  final bool _isSubscribed = false;
   bool _isLoading = false;
 
   Future<void> _handleComplete() async {
@@ -104,7 +104,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       elevation: 4,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
+        side: const BorderSide(
           color: AppTheme.primaryGreen,
           width: 2,
         ),
@@ -169,7 +169,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.check_circle,
                     size: 20,
                     color: AppTheme.primaryGreen,
@@ -192,11 +192,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Subscription Terms'),
-        content: SingleChildScrollView(
+        content: const SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               Text(
                 '• 7-day free trial for new subscribers\n'
                 '• \$10 monthly subscription begins after trial\n'

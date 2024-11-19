@@ -57,7 +57,7 @@ class DietRecord {
     this.supplements,
     this.feedingMethod = FeedingMethod.manual,
     this.customMeasurements,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

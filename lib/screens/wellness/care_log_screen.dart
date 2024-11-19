@@ -6,7 +6,6 @@ import '../../providers/pet_provider.dart';
 import '../../providers/care_provider.dart';
 import '../../models/care_log.dart';
 import '../../models/pet.dart';
-import '../../theme/app_theme.dart';
 import '../../utils/date_helper.dart';
 import '../../widgets/care/care_category_card.dart';
 import '../../widgets/care/care_log_item.dart';

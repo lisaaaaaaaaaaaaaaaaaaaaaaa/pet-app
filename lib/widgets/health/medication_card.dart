@@ -145,25 +145,25 @@ class MedicationCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (medication.instructions != null) ...[
-          const Text(
-            'Instructions',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor,
-            ),
+        ...[
+        const Text(
+          'Instructions',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor,
           ),
-          const SizedBox(height: 8),
-          Text(
-            medication.instructions!,
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppTheme.textSecondaryColor,
-            ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          medication.instructions!,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textSecondaryColor,
           ),
-          const SizedBox(height: 16),
-        ],
+        ),
+        const SizedBox(height: 16),
+      ],
         const Text(
           'Schedule',
           style: TextStyle(

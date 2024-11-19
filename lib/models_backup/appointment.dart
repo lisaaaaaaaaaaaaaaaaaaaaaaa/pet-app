@@ -1,6 +1,5 @@
 // lib/models/appointment.dart
 
-import 'package:flutter/foundation.dart';
 
 class Appointment {
   final String id;

@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-// import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'core/base_service.dart';
 import '../models/pet.dart';
@@ -11,8 +11,8 @@ import '../utils/exceptions.dart';
 import '../utils/image_utils.dart';
 
 class PetService extends BaseService {
-//   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-//   final FirebaseStorage _storage = FirebaseStorage.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
   
   static final PetService _instance = PetService._internal();
   factory PetService() => _instance;
@@ -157,7 +157,7 @@ class PetService extends BaseService {
 
           if (query != null) {
             queryRef = queryRef.where('name', isGreaterThanOrEqualTo: query)
-                .where('name', isLessThanOrEqualTo: query + '\uf8ff');
+                .where('name', isLessThanOrEqualTo: '$query\uf8ff');
           }
 
           final snapshot = await queryRef.get();

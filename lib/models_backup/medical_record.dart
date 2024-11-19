@@ -249,12 +249,12 @@ class MedicalRecord {
 
   List<String> getUpcomingVaccinations() {
     final due = <String>[];
-    vaccinations.forEach((vaccination) {
+    for (var vaccination in vaccinations) {
       final dueDate = DateTime.parse(vaccination['dueDate']);
       if (DateTime.now().isBefore(dueDate)) {
         due.add(vaccination['name']);
       }
-    });
+    }
     return due;
   }
 }

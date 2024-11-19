@@ -40,7 +40,7 @@ class MealSchedule {
     this.restrictedFoods,
     this.feedingInstructions,
     this.veterinaryNotes,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

@@ -30,12 +30,12 @@ class _AddPetScreenState extends State<AddPetScreen> {
   final Map<String, TextEditingController> _controllers = {};
   final _scrollController = ScrollController();
   
-  String _selectedSpecies = 'Dog';
-  String _selectedGender = 'Male';
+  final String _selectedSpecies = 'Dog';
+  final String _selectedGender = 'Male';
   DateTime _dateOfBirth = DateTime.now();
   File? _selectedImage;
   bool _isLoading = false;
-  bool _hasSpecialNeeds = false;
+  final bool _hasSpecialNeeds = false;
   bool _hasUnsavedChanges = false;
 
   final List<String> _speciesList = ['Dog', 'Cat', 'Bird', 'Rabbit', 'Other'];

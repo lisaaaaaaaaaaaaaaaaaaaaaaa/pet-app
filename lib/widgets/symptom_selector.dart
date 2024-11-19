@@ -236,26 +236,26 @@ class _SymptomSelectorState extends State<SymptomSelector> {
         const SizedBox(height: 8),
         DropdownButton<Duration>(
           value: _durations[symptom.id] ?? const Duration(hours: 1),
-          items: [
+          items: const [
             DropdownMenuItem(
-              value: const Duration(hours: 1),
-              child: const Text('1 hour'),
+              value: Duration(hours: 1),
+              child: Text('1 hour'),
             ),
             DropdownMenuItem(
-              value: const Duration(hours: 6),
-              child: const Text('6 hours'),
+              value: Duration(hours: 6),
+              child: Text('6 hours'),
             ),
             DropdownMenuItem(
-              value: const Duration(days: 1),
-              child: const Text('1 day'),
+              value: Duration(days: 1),
+              child: Text('1 day'),
             ),
             DropdownMenuItem(
-              value: const Duration(days: 3),
-              child: const Text('3 days'),
+              value: Duration(days: 3),
+              child: Text('3 days'),
             ),
             DropdownMenuItem(
-              value: const Duration(days: 7),
-              child: const Text('1 week'),
+              value: Duration(days: 7),
+              child: Text('1 week'),
             ),
           ],
           onChanged: (value) {

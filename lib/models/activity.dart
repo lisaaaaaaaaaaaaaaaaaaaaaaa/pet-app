@@ -34,7 +34,7 @@ class Activity {
     this.attachments,
     this.stats,
     this.isPremium = false,
-  }) : this.createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {

@@ -1,6 +1,5 @@
 // lib/models/pet_profile.dart
 
-import 'package:flutter/foundation.dart';
 
 class PetProfile {
   final String id;

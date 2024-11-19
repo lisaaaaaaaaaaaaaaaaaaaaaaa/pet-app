@@ -278,7 +278,7 @@ class SymptomCard extends StatelessWidget {
               ),
               child: Text(
                 medication,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
                   color: AppTheme.primaryColor,
                   fontWeight: FontWeight.w500,

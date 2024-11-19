@@ -1,6 +1,5 @@
 // lib/models/behavior_log.dart
 
-import 'package:flutter/foundation.dart';
 
 class BehaviorLog {
   final String id;

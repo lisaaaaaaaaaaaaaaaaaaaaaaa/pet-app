@@ -1,6 +1,5 @@
 // lib/models/symptom_log.dart
 
-import 'package:flutter/foundation.dart';
 
 class SymptomLog {
   final String id;
